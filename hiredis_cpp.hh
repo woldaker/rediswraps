@@ -1,14 +1,11 @@
 #ifndef HIREDIS_CPP_HH
 #define HIREDIS_CPP_HH
 
-#include <cassert> // used once in cmd().  If functionality for last_response() is removed, this can also be removed.
 #include <cstring> // strcpy() used in format_cmd_args()
 
-#include <algorithm> // used in trim() functions
 #include <array>         // used in cmd_proxy()
 #include <iostream>
 #include <fstream>       // used in read_file()
-#include <limits>        // used in convert<>() functions to safely test for and/or correct overflow.
 #include <sstream>       // used in read_file()
 #include <string>
 #include <type_traits>   // enable_if<>...
@@ -16,24 +13,14 @@
 #include <utility>       // std::forward()
 #include <queue>         // Holds all the response strings from Redis
 
+#include <boost/lexical_cast.hpp>
+
 extern "C" {
 #include <hiredis/hiredis.h>
 }
 
 
 namespace hiredis_cpp {
-#define WARN_VALUE_TOO_LARGE(target, requested_type, gcc_expansion_type) \
-  std::cerr << "WARNING: Integer value of '" << target << "' is outside the valid range of the longest integer type on your system.  " \
-    "The compiler has been forced to use 0 in its place.  Either use the GCC expansion type " gcc_expansion_type " (not supported by " \
-    "hiredis-cpp) or write a CustomType to accomodate values of such magnitude, for which the function hiredis_cpp" \
-    "::convert<CustomType>(std::string const&) must be defined in order to continue using hiredis-cpp." \
-  << std::endl
-
-#define WARN_VALUE_OUT_OF_RANGE(target, requested_type, next_largest_type) \
-  std::cerr << "WARNING: Integer value of '" << target << "' is outside the valid range of type " requested_type "!  " \
-    "Try using type " next_largest_type " instead." \
-  << std::endl
-
 constexpr char const *NIL = "(nil)";
 constexpr char const *OK  = "OK";
 
@@ -54,6 +41,8 @@ constexpr int         PORT = 6379;
 // namespace hiredis_cpp::DEFAULT }}}
 
 namespace utils {
+/*
+// trim() functions {{{
 void ltrim(std::string &s) {
   s.erase(
     s.begin(),
@@ -82,41 +71,39 @@ void trim(std::string &s) {
   ltrim(s);
   rtrim(s);
 }
+// trim() functions }}}
+*/
 
-template<char delim = '\0', typename Token, typename = typename std::enable_if<std::is_arithmetic<Token>::value>::type>
-inline std::string to_string(Token const item) {
-  return std::to_string(item);
-}
-
-template<char delim = '\0', typename Token, typename = typename std::enable_if<std::is_constructible<std::string, Token>::value>::type>
+template<typename Token, typename = typename std::enable_if<std::is_constructible<std::string, Token>::value>::type>
 inline std::string to_string(Token const &item) {
   return item;
 }
 
-template<char delim = '\0', typename Token, typename... Tokens>
-std::string to_string(Token const &token, Tokens&&... tokens) {
-  return (delim == '\0' ?
-    to_string(token) :
-    to_string(token).append(1, delim)
-  ).append(to_string<delim>(std::forward<Tokens>(tokens)...));
+template<typename Token, typename = typename std::enable_if<!std::is_constructible<std::string, Token>::value>::type, typename Dummy = void>
+inline std::string to_string(Token const &item) {
+  std::string converted;
+
+  return boost::conversion::try_lexical_convert(item, converted) ?
+    converted :
+    (std::cerr << "Conversion ERROR:\n" << __PRETTY_FUNCTION__ << std::endl, "");
 }
-  
-// convert() functions {{{
-template<typename T>
-T convert(std::string const &target) = delete;
+
+template<typename TargetType, typename = typename std::enable_if<std::is_void<TargetType>::value || std::is_default_constructible<TargetType>::value>::type>
+inline TargetType convert(std::string const &target) {
+  TargetType new_target;
+
+  return boost::conversion::try_lexical_convert(target, new_target) ?
+    new_target :
+    (std::cerr << "Conversion ERROR:\n" << __PRETTY_FUNCTION__ << std::endl, TargetType());
+}
 
 template<>
 inline void convert<void>(std::string const &target) {}
 
-// explicit specializations
-// BOOL {{{
-// IMPORTANT convert<bool>() is used in nearly every other convert<>() specialization
-// TODO Override me if this particular definition of "true/false-ness" doesn't suit your needs.
-//
 template<>
-bool convert<bool>(std::string const &target_original) {
-  std::string target(target_original);
-  trim(target);
+bool convert<bool>(std::string const &target) {
+  //std::string target(target_original);
+  //trim(target);
 
   return !target.empty() && (target != NIL) &&
   (
@@ -125,239 +112,14 @@ bool convert<bool>(std::string const &target_original) {
     // (target == "true") ||
     (std::strtol(target.c_str(), nullptr, 10) != 0)
     // Case-insensitive version.  e.g. also convert "TrUe" to true:
-    /* ||
-    (target.length() == 4 &&
-      (target[0] == 'T' || target[0] == 't') &&
-      (target[1] == 'R' || target[1] == 'r') &&
-      (target[2] == 'U' || target[2] == 'u') &&
-      (target[3] == 'E' || target[3] == 'e')
-    ) */
+    // || (target.length() == 4 &&
+    //  (target[0] == 'T' || target[0] == 't') &&
+    //  (target[1] == 'R' || target[1] == 'r') &&
+    //  (target[2] == 'U' || target[2] == 'u') &&
+    //  (target[3] == 'E' || target[3] == 'e')
+    //)
   );
 }
-// BOOL }}}
-
-// UNSIGNED INTEGERS {{{
-template<>
-unsigned long long convert<unsigned long long>(std::string const &target) {
-  if (convert<bool>(target)) {
-    try {
-      return std::stoull(target.c_str());
-    }
-    catch (std::out_of_range const &e) {
-      WARN_VALUE_TOO_LARGE(target, "unsigned long long", "unsigned __int128");
-    }
-    catch (std::exception const &e) {
-      std::cerr << e.what() << std::endl;
-    }
-  }
-
-  return 0;
-}
-
-template<>
-unsigned long convert<unsigned long>(std::string const &target) {
-  if (convert<bool>(target)) {
-    try {
-      return std::stoul(target.c_str());
-    }
-    catch (std::out_of_range const &e) {
-      WARN_VALUE_OUT_OF_RANGE(target, "unsigned long", "unsigned long long");
-    }
-    catch (std::exception const &e) {
-      std::cerr << e.what() << std::endl;
-    }
-  }
-
-  return 0;
-}
-
-template<>
-unsigned int convert<unsigned int>(std::string const &target) {
-  if (convert<bool>(target)) {
-    try {
-      return std::stoi(target);
-    }
-    catch (std::out_of_range const &e) {
-      WARN_VALUE_OUT_OF_RANGE(target, "unsigned int", "unsigned long");
-    }
-    catch (std::exception const &e) {
-      std::cerr << e.what() << std::endl;
-    }
-  }
-
-  return 0;
-}
-
-template<>
-unsigned short convert<unsigned short>(std::string const &target) {
-  if (convert<bool>(target)) {
-    try {
-      unsigned int val = std::stoi(target);
-
-      if (val > std::numeric_limits<unsigned short>::max()) {
-        throw std::out_of_range(nullptr);
-      }
-
-      return static_cast<unsigned short>(val);
-    }
-    catch (std::out_of_range const &e) {
-      WARN_VALUE_OUT_OF_RANGE(target, "unsigned short", "unsigned int");
-    }
-    catch (std::exception const &e) {
-      std::cerr << e.what() << std::endl;
-    }
-  }
-
-  return 0;
-}
-
-template<>
-unsigned char convert<unsigned char>(std::string const &target) {
-  if (convert<bool>(target)) {
-    try {
-      unsigned int val = std::stoi(target);
-
-      if (val > std::numeric_limits<unsigned char>::max()) {
-        throw std::out_of_range(nullptr);
-      }
-
-      return static_cast<unsigned char>(val);
-    }
-    catch (std::out_of_range const &e) {
-      WARN_VALUE_OUT_OF_RANGE(target, "unsigned char", "unsigned short");
-    }
-    catch (std::exception const &e) {
-      std::cerr << e.what() << std::endl;
-    }
-  }
-
-  return 0;
-}
-// UNSIGNED INTEGERS }}}
-
-// SIGNED INTEGERS {{{
-template<>
-long long convert<long long>(std::string const &target) {
-  if (convert<bool>(target)) {
-    try {
-      return std::stoll(target.c_str());
-    }
-    catch (std::out_of_range const &e) {
-      WARN_VALUE_TOO_LARGE(target, "long long", "__int128");
-    }
-    catch (std::exception const &e) {
-      std::cerr << e.what() << std::endl;
-    }
-  }
-
-  return 0;
-}
-
-template<>
-long convert<long>(std::string const &target) {
-  if (convert<bool>(target)) {
-    try {
-      return std::stol(target.c_str());
-    }
-    catch (std::out_of_range const &e) {
-      WARN_VALUE_OUT_OF_RANGE(target, "long", "long long");
-    }
-    catch (std::exception const &e) {
-      std::cerr << e.what() << std::endl;
-    }
-  }
-
-  return 0;
-}
-
-template<>
-int convert<int>(std::string const &target) {
-  if (convert<bool>(target)) {
-    try {
-      return std::stoi(target);
-    }
-    catch (std::out_of_range const &e) {
-      WARN_VALUE_OUT_OF_RANGE(target, "int", "long");
-    }
-    catch (std::exception const &e) {
-      std::cerr << e.what() << std::endl;
-    }
-  }
-
-  return 0;
-}
-
-template<>
-short convert<short>(std::string const &target) {
-  if (convert<bool>(target)) {
-    try {
-      int val = std::stoi(target);
-
-      if (val > std::numeric_limits<short>::max()) {
-        throw std::out_of_range(nullptr);
-      }
-
-      return static_cast<short>(val);
-    }
-    catch (std::out_of_range const &e) {
-      WARN_VALUE_OUT_OF_RANGE(target, "short", "int");
-    }
-    catch (std::exception const &e) {
-      std::cerr << e.what() << std::endl;
-    }
-  }
-
-  return 0;
-}
-
-template<>
-char convert<char>(std::string const &target) {
-  if (convert<bool>(target)) {
-    try {
-      int val = std::stoi(target);
-
-      if (val > std::numeric_limits<char>::max()) {
-        throw std::out_of_range(nullptr);
-      }
-
-      return static_cast<char>(val);
-    }
-    catch (std::out_of_range const &e) {
-      WARN_VALUE_OUT_OF_RANGE(target, "char", "short");
-    }
-    catch (std::exception const &e) {
-      std::cerr << e.what() << std::endl;
-    }
-  }
-
-  return 0;
-}
-// SIGNED INTEGERS }}}
-
-// FLOATING-POINT {{{
-template<>
-float convert<float>(std::string const &target) {
-  return convert<bool>(target) ? std::stof(target.c_str()) : 0.0f;
-}
-
-template<>
-double convert<double>(std::string const &target) {
-  return convert<bool>(target) ? std::stod(target.c_str()) : 0.0f;
-}
-// FLOATING-POINT }}}
-
-// STRING & CHAR-ARRAY/POINTERS {{{
-template<>
-inline char const *convert<char const*>(std::string const &target) {
-  return target.c_str();
-}
-
-template<>
-inline std::string convert<std::string>(std::string const &target) {
-  return target;
-}
-// STRING & CHAR-ARRAY/POINTERS }}}
-// convert() functions }}}
 
 std::string const read_file(std::string const &filepath) {
   std::ifstream input(filepath);
@@ -439,11 +201,14 @@ class Connection {
   //   disregard the response and flush it from the queue.
   template<typename ReturnType, typename... Args>
   ReturnType cmd(std::string const &base, Args&&... args) {
+    this->flush();
+
     if (this->cmd(base, std::forward<Args>(args)...)) {
       return this->response<ReturnType>();
     }
     
     std::cerr << "hiredis-cpp ERROR: " << this->response() << std::endl;
+
     return utils::convert<ReturnType>(NIL);
   }
   // cmd<>() }}}

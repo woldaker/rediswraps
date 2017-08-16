@@ -1,11 +1,15 @@
 #include <iostream>
 #include <memory>
 
+#include <boost/timer/timer.hpp>
+
 #include "hiredis_cpp.hh"
 
 constexpr int DEFAULT_TEST_LEN = 25;
 
 int main(int argc, char const *argv[]) {
+  boost::timer::auto_cpu_timer t;
+
   // IMPORTANT: ALWAYS MAKE thread_local to avoid sharing response queues.
   thread_local std::unique_ptr<hiredis_cpp::Connection> redis(new hiredis_cpp::Connection());
 

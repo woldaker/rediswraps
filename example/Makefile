@@ -4,5 +4,5 @@ COMPILE := g++ -std=c++11 -Wall -Wextra -Wfatal-errors -pedantic -g -iquote.. -I
 HIREDIS_FLAGS := -w
 
 test : test.cc ../hiredis_cpp.hh
-	@$(COMPILE) $(HIREDIS_FLAGS) $< -o $@ -lhiredis
+	@$(COMPILE) $(HIREDIS_FLAGS) $< -o $@ -lhiredis -lboost_timer
 
