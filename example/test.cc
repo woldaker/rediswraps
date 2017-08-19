@@ -1,3 +1,4 @@
+#include <cassert>
 #include <iostream>
 #include <memory>
 
@@ -5,7 +6,7 @@
 
 #include "hiredis_cpp.hh"
 
-constexpr int DEFAULT_TEST_LEN = 25;
+constexpr int DEFAULT_TEST_LEN = 1000;
 
 int main(int argc, char const *argv[]) {
   if (argc > 2) {
@@ -17,45 +18,10 @@ int main(int argc, char const *argv[]) {
   boost::timer::auto_cpu_timer bOoStBeNcHmArKtImEr; //
 //////////////////////////////////////////////////////
 
-  // IMPORTANT: ALWAYS MAKE thread_local to avoid sharing response queues.
   thread_local std::unique_ptr<hiredis_cpp::Connection> redis(new hiredis_cpp::Connection());
 
   int const test_len = (argc >= 2 ? hiredis_cpp::utils::convert<int>(argv[1]) : DEFAULT_TEST_LEN);
 
-  // We will be pushing integers onto a LIFO list (stack) and pulling them all out again and
-  //   printing them in different ways.
-/*
-  if (!redis->cmd("del", "foobar")) {
-    return EXIT_FAILURE;
-  }
-  
-  for (int i = 1; i <= test_len; ++i) {
-    if (!redis->cmd("lpush", "foobar", i)) {
-      return EXIT_FAILURE;
-    }
-  }
-  
-  // there will now be the specified number of items in the list "foobar"
-  auto foobar_len = redis->cmd<int>("llen", "foobar");
-
-  if (foobar_len && *foobar_len != test_len) {
-    std::cerr << "Something went wrong here: \n"
-      "  foobar_len (" << *foobar_len << ") != test_len (" << test_len << ")"
-    << std::endl;
-
-    return EXIT_FAILURE;
-  }
-
-  // Pop off the values we just pushed and print them as integers...
-  if (!redis->cmd<Stash>("lrange", "foobar", 0, -1)) {
-    return EXIT_FAILURE;
-  }
-
-  // and loop through them:
-  while (redis->has_response()) {
-    std::cout << "lrange has given: " << *redis->response<float>() << "\n";
-  }
-*/
   try {
     redis->Cmd("del", "foobar");
   
@@ -64,22 +30,15 @@ int main(int argc, char const *argv[]) {
     }
   
     // there will now be the specified number of items in the list "foobar"
-    int foobar_len = redis->Cmd<int>("llen", "foobar");
+    assert(redis->Cmd<int>("llen", "foobar") == test_len);
 
-    if (foobar_len != test_len) {
-      std::cerr << "Something went wrong here: \n"
-        "  foobar_len (" << foobar_len << ") != test_len (" << test_len << ")"
-      << std::endl;
-
-      return EXIT_FAILURE;
-    }
-
-    // Pop off the values we just pushed and print them as integers...
+    // Pop off all the values we just pushed (using Stash)
     redis->Cmd<Stash>("lrange", "foobar", 0, -1);
 
     // and loop through them:
-    while (redis->has_response()) {
-      std::cout << "lrange has given: " << redis->Response<float>() << "\n";
+    for (int i = 0; redis->has_response(); ++i) {
+      auto fooval = redis->Response<float>();
+      std::cout << "[" << i << "] => '" << fooval << "'\n";
     }
   }
   catch (std::exception const &e) {

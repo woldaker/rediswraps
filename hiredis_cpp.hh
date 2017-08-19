@@ -20,7 +20,6 @@ extern "C" {
 #include <hiredis/hiredis.h>
 }
 
-
 namespace hiredis_cpp {
 namespace DEFAULT {
   constexpr char const *HOST = "127.0.0.1";
@@ -40,12 +39,18 @@ struct Void  {};
 
 namespace utils {
 template<typename Token, typename = typename std::enable_if<std::is_constructible<std::string, Token>::value>::type>
-inline std::string to_string(Token const &item) {
+#ifndef HIREDIS_CPP_DEBUG
+inline
+#endif
+std::string to_string(Token const &item) {
   return item;
 }
 
 template<typename Token, typename = typename std::enable_if<!std::is_constructible<std::string, Token>::value>::type, typename Dummy = void>
-inline std::string to_string(Token const &item) {
+#ifndef HIREDIS_CPP_DEBUG
+inline
+#endif
+std::string to_string(Token const &item) {
   std::string converted;
 
   return boost::conversion::try_lexical_convert(item, converted) ?
@@ -53,9 +58,16 @@ inline std::string to_string(Token const &item) {
     (std::cerr << "Conversion ERROR:\n" << __PRETTY_FUNCTION__ << std::endl, "");
 }
 
-template<typename TargetType, typename = typename std::enable_if<std::is_default_constructible<TargetType>::value>::type>
-inline TargetType convert(std::string const &target) {
+template<typename TargetType, typename = typename std::enable_if<std::is_default_constructible<TargetType>::value && !std::is_void<TargetType>::value>::type>
+#ifndef HIREDIS_CPP_DEBUG
+inline
+#endif
+TargetType convert(std::string const &target) {
   TargetType new_target;
+
+#ifdef HIREDIS_CPP_DEBUG
+  std::cout << "Converting string '" << target << "' to type '" << typeid(TargetType).name() << "'" << std::endl;
+#endif
 
   return boost::conversion::try_lexical_convert(target, new_target) ?
     new_target :
@@ -63,16 +75,25 @@ inline TargetType convert(std::string const &target) {
 }
 
 template<>
-inline Stash convert<Stash>(std::string const &target) {
+#ifndef HIREDIS_CPP_DEBUG
+inline
+#endif
+Stash convert<Stash>(std::string const &target) {
   return {};
 }
 
 template<>
-inline Void convert<Void>(std::string const &target) {
+#ifndef HIREDIS_CPP_DEBUG
+inline
+#endif
+Void convert<Void>(std::string const &target) {
   return {};
 }
 
 template<>
+#ifndef HIREDIS_CPP_DEBUG
+inline
+#endif
 bool convert<bool>(std::string const &target) {
   return !target.empty() && (target != NIL) && (
     (target == OK) ||
@@ -98,6 +119,27 @@ std::string const read_file(std::string const &filepath) {
 }
 } // namespace utils
 
+// DEBUG FUNCTIONS {{{
+#ifdef HIREDIS_CPP_DEBUG
+template<typename Arg>
+inline std::string args_to_string(Arg const &arg) {
+  return utils::to_string(arg);
+}
+
+template<typename Arg, typename... Args>
+inline std::string args_to_string(Arg const &arg, Args&&... args) {
+  std::string arg_string(utils::to_string(arg));
+  arg_string += ", ";
+  return arg_string += args_to_string(std::forward<Args>(args)...);
+}
+
+auto WHEREAMI = [&](std::string const &desc = "") -> void {
+  std::cout << "\n-------------------------\nIn function:\n\n"
+    << (!desc.empty() ? desc : __PRETTY_FUNCTION__)
+  << "\n" << std::endl;
+};
+#endif
+// DEBUG FUNCTIONS }}}
 
 class Connection {
  public:
@@ -124,15 +166,31 @@ class Connection {
   // constructors & destructors }}}
 
   // small, inline methods - flush, has_response, & is_connected {{{
-  inline void flush() {
+#ifndef HIREDIS_CPP_DEBUG
+  inline
+#endif
+  void flush() {
     this->responses_ = {};
   }
 
-  inline bool const has_response() {
+#ifndef HIREDIS_CPP_DEBUG
+  inline
+#endif
+  bool const has_response() {
     return !this->responses_.empty();
   }
 
-  inline bool const is_connected() const noexcept {
+#ifndef HIREDIS_CPP_DEBUG
+  inline
+#endif
+  size_t const num_responses() const {
+    return this->responses_.size();
+  }
+
+#ifndef HIREDIS_CPP_DEBUG
+  inline
+#endif
+  bool const is_connected() const noexcept {
     return !(this->context_ == nullptr || this->context_->err);
   }
   // flush, has_response, & is_connected }}}
@@ -189,7 +247,10 @@ class Connection {
     return true;
   }
 
-  inline bool const load_lua_script_from_file(
+#ifndef HIREDIS_CPP_DEBUG
+  inline
+#endif
+  bool const load_lua_script_from_file(
       std::string const &filepath,
       std::string const &alias,
       size_t const keycount = 0,
@@ -199,7 +260,10 @@ class Connection {
   }
 
   // shorter alias for the filepath version:
-  inline bool const load_lua_script(
+#ifndef HIREDIS_CPP_DEBUG
+  inline
+#endif
+  bool const load_lua_script(
     std::string const &filepath,
     std::string const &alias,
     size_t const keycount = 0,
@@ -240,7 +304,14 @@ class Connection {
   //    would be discarded and we would only be returned the last one.
   //
   template<typename ReturnType = std::string, typename = typename std::enable_if<!std::is_void<ReturnType>::value>::type, typename... Args>
-  inline boost::optional<ReturnType> cmd(std::string const &base, Args&&... args) noexcept {
+#ifndef HIREDIS_CPP_DEBUG
+  inline
+#endif
+  boost::optional<ReturnType> cmd(std::string const &base, Args&&... args) noexcept {
+    if (!std::is_same<ReturnType, Stash>::value) {
+      this->flush();
+    }
+
     return this->scripts_.count(base) ?
       this->cmd_proxy<ReturnType>(
         "EVALSHA",
@@ -255,11 +326,31 @@ class Connection {
   }
   
   // Cmd()
-  //
   // Just like cmd() except returns the actual type OR throws an exception
   template<typename ReturnType = Void, typename = typename std::enable_if<!std::is_void<ReturnType>::value>::type, typename... Args>
-  inline ReturnType Cmd(std::string const &base, Args&&... args) {
+#ifndef HIREDIS_CPP_DEBUG
+  inline
+#endif
+  ReturnType Cmd(std::string const &base, Args&&... args) {
+#ifdef HIREDIS_CPP_DEBUG
+    std::string funcname(__func__);
+    funcname += "<";
+    funcname += typeid(ReturnType).name();
+    funcname += ">(";
+    funcname += args_to_string(base, std::forward<Args>(args)...);
+    funcname += ")";
+    WHEREAMI(funcname);
+
+    std::cout << "Responses before:\n";
+    this->print_responses();
+#endif
+
     auto retval = this->cmd<ReturnType>(base, std::forward<Args>(args)...);
+
+#ifdef HIREDIS_CPP_DEBUG
+    std::cout << "Responses after:\n";
+    this->print_responses();
+#endif
 
     if (!retval) {
       throw std::logic_error("");
@@ -272,6 +363,9 @@ class Connection {
 
   // response() {{{
   template<typename ReturnType = std::string>
+#ifndef HIREDIS_CPP_DEBUG
+inline
+#endif
   boost::optional<ReturnType> response(bool const pop_response = true, bool const from_back = false) {
     if (!this->has_response()) {
       std::cerr << "Warning: No responses left in queue." << std::endl;
@@ -300,7 +394,20 @@ class Connection {
 
   // Same as response() except returns the actual value or throws an exception
   template<typename ReturnType = std::string>
-  inline ReturnType Response(bool const pop_response = true, bool const from_back = false) {
+#ifndef HIREDIS_CPP_DEBUG
+inline
+#endif
+  ReturnType Response(bool const pop_response = true, bool const from_back = false) {
+#ifdef HIREDIS_CPP_DEBUG
+    std::string funcname(__func__);
+    funcname += "<";
+    funcname += typeid(ReturnType).name();
+    funcname += ">(";
+    funcname += args_to_string(pop_response, from_back);
+    funcname += ")";
+    WHEREAMI(funcname);
+#endif
+
     auto retval = this->response<ReturnType>(pop_response, from_back);
 
     if (!retval) {
@@ -313,7 +420,10 @@ class Connection {
 
   // last_response() {{{
   template<typename ReturnType = std::string>
-  inline boost::optional<ReturnType> last_response(bool const pop_response) {
+#ifndef HIREDIS_CPP_DEBUG
+  inline
+#endif
+  boost::optional<ReturnType> last_response(bool const pop_response) {
     return this->response<ReturnType>(pop_response, true);
   }
   // last_response() }}}
@@ -368,7 +478,10 @@ class Connection {
     this->context_ = nullptr;
   }
 
-  inline void reconnect() {
+#ifndef HIREDIS_CPP_DEBUG
+  inline
+#endif
+  void reconnect() {
     this->disconnect();
     this->connect();
   }
@@ -377,7 +490,9 @@ class Connection {
   // parse_reply() {{{
   template<typename ReturnType, typename = typename std::enable_if<!std::is_void<ReturnType>::value>::type>
   boost::optional<ReturnType> parse_reply(redisReply *&reply, bool const recursion = false) {
-    constexpr bool queue_responses = std::is_same<ReturnType, Stash>::value;
+    // This cannot be a constant because there is one corner case where we'll need to change it
+    //   within this function: when reply->type is REDIS_REPLY_ARRAY
+    bool queue_responses = std::is_same<ReturnType, Stash>::value;
 
     std::string response_string;
     bool success = true;
@@ -415,6 +530,12 @@ class Connection {
         response_string = NIL;
         break;
       case REDIS_REPLY_ARRAY:
+        // Do not queue THIS reply... which is just to start the array unrolling and
+        //   carries no actual reply data with it.
+        // Recursive calls in the following for loop will not enter this section (unless
+        //   they too are arrays...) and will not be affected
+        queue_responses = false;
+
         for (size_t i = 0; i < reply->elements; ++i) {
           success &= !!this->parse_reply<ReturnType>(reply->element[i], true);
 
@@ -437,7 +558,7 @@ class Connection {
     }
 
     if (success && queue_responses) {
-      this->responses_.emplace_back(response_string);
+      this->responses_.emplace_front(response_string);
     }
 
     if (!recursion) {
@@ -454,7 +575,10 @@ class Connection {
 
   // format_cmd_args() {{{
   template<int argc>
-  inline void format_cmd_args(
+#ifndef HIREDIS_CPP_DEBUG
+  inline
+#endif
+  void format_cmd_args(
     std::array<char*, argc> &&arg_strings,
     int const args_index
   ) {}
@@ -545,6 +669,7 @@ class Connection {
 } // namespace hiredis_cpp
 
 using hiredis_cpp::Stash;
+using hiredis_cpp::Void;
 
 #endif
 
