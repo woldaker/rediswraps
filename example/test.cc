@@ -23,8 +23,48 @@ int main(int argc, char const *argv[]) {
   int const test_len = (argc >= 2 ? hiredis_cpp::utils::convert<int>(argv[1]) : DEFAULT_TEST_LEN);
 
   try {
+    redis->Cmd("flushall");
+
+    // Add new command 'pdel' via Lua script
+    redis->load_lua_script("pdel.lua", "pdel");
+
+    // Configure test of pdel
+    auto test_pdel = [&](std::string const &pattern, int const keys_deleted_expected) -> void {
+      // reset some test keys
+      redis->Cmd("set", "abc", 1);
+      redis->Cmd("set", "abcd", 2);
+      redis->Cmd("set", "bbcd", 3);
+
+      int keys_deleted = redis->Cmd<int>("pdel", pattern);
+      assert(keys_deleted == keys_deleted_expected);
+    };
+
+    // Try it out:
+    // c* should delete none
+    test_pdel("c*", 0);
+    std::cout << "Keys remaining after issuing command 'pdel \"c*\" :\n";
+    redis->Cmd<Stash>("keys", "*");
+    redis->print_responses();
+    // bbc* should delete 1
+    test_pdel("bbc*", 1);
+    std::cout << "Keys remaining after issuing command 'pdel \"bbc*\" :\n";
+    redis->Cmd<Stash>("keys", "*");
+    redis->print_responses();
+    // abc* should delete 2
+    test_pdel("abc*", 2);
+    std::cout << "Keys remaining after issuing command 'pdel \"abc*\" :\n";
+    redis->Cmd<Stash>("keys", "*");
+    redis->print_responses();
+    // *bc* should delete all 3
+    test_pdel("*bc*", 3);
+    std::cout << "Keys remaining after issuing command 'pdel \"*bc*\" :\n";
+    redis->Cmd<Stash>("keys", "*");
+    redis->print_responses();
+
+    // ensure foobar key doesn't exist
     redis->Cmd("del", "foobar");
   
+    // push some numbers onto it as a list
     for (int i = 1; i <= test_len; ++i) {
       redis->Cmd("lpush", "foobar", i);
     }
