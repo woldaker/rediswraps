@@ -2,9 +2,13 @@
 #include <iostream>
 #include <memory>
 
+#ifdef REDISWRAPS_BENCHMARK
 #include <boost/timer/timer.hpp>
+#endif
 
-#include "hiredis_cpp.hh"
+#include "rediswraps.hh"
+using RedisConnection = rediswraps::Connection;
+
 
 constexpr int DEFAULT_TEST_LEN = 1000;
 
@@ -14,51 +18,59 @@ int main(int argc, char const *argv[]) {
     return EXIT_FAILURE;
   }
 
+#ifdef REDISWRAPS_BENCHMARK
 //// START PROGRAM BENCHMARK TIMER ///////////////////
   boost::timer::auto_cpu_timer bOoStBeNcHmArKtImEr; //
 //////////////////////////////////////////////////////
+#endif
 
-  thread_local std::unique_ptr<hiredis_cpp::Connection> redis(new hiredis_cpp::Connection());
+  std::cout << "NOEXCEPT = "
+#ifdef REDISWRAPS_NOEXCEPT
+    "true"
+#else
+    "false"
+#endif
+  << std::endl;
 
-  int const test_len = (argc >= 2 ? hiredis_cpp::utils::convert<int>(argv[1]) : DEFAULT_TEST_LEN);
+  thread_local std::unique_ptr<RedisConnection> redis(new RedisConnection("127.0.0.1", 6379));
+
+  int const test_len = (argc >= 2 ? rediswraps::utils::convert<int>(argv[1]) : DEFAULT_TEST_LEN);
 
   try {
-    redis->Cmd("flushall");
-
     // Add new command 'pdel' via Lua script
     redis->load_lua_script("pdel.lua", "pdel");
 
     // Configure test of pdel
     auto test_pdel = [&](std::string const &pattern, int const keys_deleted_expected) -> void {
       // reset some test keys
-      redis->Cmd("set", "abc", 1);
-      redis->Cmd("set", "abcd", 2);
-      redis->Cmd("set", "bbcd", 3);
+      redis->Cmd("set", "abRedisWrapsc", "ab prefix, c suffix");
+      redis->Cmd("set", "abRedisWrapscd", "ab prefix, cd suffix");
+      redis->Cmd("set", "bbRedisWrapscd", "bb prefix, cd suffix");
 
       int keys_deleted = redis->Cmd<int>("pdel", pattern);
       assert(keys_deleted == keys_deleted_expected);
     };
 
     // Try it out:
-    // c* should delete none
+    // c* : should delete none -- no keys start with 'c'
     test_pdel("c*", 0);
     std::cout << "Keys remaining after issuing command 'pdel \"c*\" :\n";
-    redis->Cmd<Stash>("keys", "*");
+    redis->Cmd<Stash>("keys", "*RedisWraps*");
     redis->print_responses();
-    // bbc* should delete 1
-    test_pdel("bbc*", 1);
-    std::cout << "Keys remaining after issuing command 'pdel \"bbc*\" :\n";
-    redis->Cmd<Stash>("keys", "*");
+    // ab*c : should delete 1
+    test_pdel("ab*c", 1);
+    std::cout << "Keys remaining after issuing command 'pdel \"ab*c\" :\n";
+    redis->Cmd<Stash>("keys", "*RedisWraps*");
     redis->print_responses();
-    // abc* should delete 2
-    test_pdel("abc*", 2);
-    std::cout << "Keys remaining after issuing command 'pdel \"abc*\" :\n";
-    redis->Cmd<Stash>("keys", "*");
+    // *cd should delete 2
+    test_pdel("*cd", 2);
+    std::cout << "Keys remaining after issuing command 'pdel \"*cd\" :\n";
+    redis->Cmd<Stash>("keys", "*RedisWraps*");
     redis->print_responses();
-    // *bc* should delete all 3
-    test_pdel("*bc*", 3);
-    std::cout << "Keys remaining after issuing command 'pdel \"*bc*\" :\n";
-    redis->Cmd<Stash>("keys", "*");
+    // *bRedisWrapsc* should delete all 3
+    test_pdel("*b*c*", 3);
+    std::cout << "Keys remaining after issuing command 'pdel \"*bRedisWrapsc*\" :\n";
+    redis->Cmd<Stash>("keys", "*RedisWraps*");
     redis->print_responses();
 
     // ensure foobar key doesn't exist

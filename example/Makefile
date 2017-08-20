@@ -1,20 +1,38 @@
-# Just comment this line out or delete the value on the right side of the assignment
-#   for production build
-HIREDIS_CPP_DEBUG :=
-BENCHMARK_EXE_TIME := true
+# NOEXCEPT Build switch -- 0 or 1
+#   0 = cmd<T>() will ignore or forward any thrown exceptions and therefore can return type T directly
+#   1 = cmd<T>() will catch its own exceptions but is therefore forced to return a boost::optional<T>
+NOEXCEPT ?= 1
 
-OPTIMIZATION_FLAGS := $(if $(HIREDIS_CPP_DEBUG),-ggdb3 -O0 -rdynamic -DHIREDIS_CPP_DEBUG,-O2)
+# BENCHMARK build switch -- 0 or 1
+#   1 = Program will print total execution time after terminating
+BENCHMARK ?= 1
 
-COMPILE := g++ -std=c++11 -Wall -Wextra -Wfatal-errors -pedantic $(OPTIMIZATION_FLAGS) -iquote.. -I/usr/local/include -L/usr/local/lib
 
-# the hiredis library needs warnings ignored
-HIREDIS_FLAGS := -w
+# set some compiler flags
+CXX      ?= g++
+CFLAGS   += -iquote.. -I/usr/local/include -L/usr/local/lib
+CPPFLAGS += -Wall -Wextra -Wfatal-errors -pedantic
+# the hiredis library spits out ugly warnings in combination with the strict error checking flags I use
+CPPFLAGS += -w
+CXXFLAGS += -std=c++11
 
-# the boost libs we need to link
-BOOST_LIBS := $(if $(BENCHMARK_EXE_TIME),timer)
+ifneq ($(NOEXCEPT),0)
+CXXFLAGS += -DREDISWRAPS_NOEXCEPT
+endif
 
-LDFLAGS := -lhiredis $(addprefix -lboost_,$(BOOST_LIBS))
+OPTIMIZATION_FLAGS       := -O2
+DEBUG_OPTIMIZAITON_FLAGS := -ggdb3 -O0 -rdynamic -DREDISWRAPS_DEBUG
 
-test : test.cc ../hiredis_cpp.hh
-	@$(COMPILE) $(HIREDIS_FLAGS) $< -o $@ $(LDFLAGS)
+LIBS := hiredis $(if $(subst 0,,$(BENCHMARK)),boost_timer)
+LDFLAGS := $(addprefix -l,$(LIBS))
+
+.DEFAULT_GOAL = test
+
+test debug : test.cc ../rediswraps.hh
+
+test :
+	$(CXX) $(CFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(OPTIMIZATION_FLAGS) $< -o $@ $(LDFLAGS)
+
+debug :
+	$(CXX) $(CFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(DEBUG_OPTIMIZATION_FLAGS) $< -o $@ $(LDFLAGS)
 

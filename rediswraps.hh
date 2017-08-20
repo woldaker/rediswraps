@@ -1,5 +1,5 @@
-#ifndef HIREDIS_CPP_HH
-#define HIREDIS_CPP_HH
+#ifndef REDISWRAPS_HH
+#define REDISWRAPS_HH
 
 #include <cstring> // strcpy() used in format_cmd_args()
 
@@ -20,7 +20,7 @@ extern "C" {
 #include <hiredis/hiredis.h>
 }
 
-namespace hiredis_cpp {
+namespace rediswraps {
 namespace DEFAULT {
   constexpr char const *HOST = "127.0.0.1";
   constexpr int         PORT = 6379;
@@ -39,7 +39,7 @@ struct Void  {};
 
 namespace utils {
 template<typename Token, typename = typename std::enable_if<std::is_constructible<std::string, Token>::value>::type>
-#ifndef HIREDIS_CPP_DEBUG
+#ifndef REDISWRAPS_DEBUG
 inline
 #endif
 std::string to_string(Token const &item) {
@@ -47,7 +47,7 @@ std::string to_string(Token const &item) {
 }
 
 template<typename Token, typename = typename std::enable_if<!std::is_constructible<std::string, Token>::value>::type, typename Dummy = void>
-#ifndef HIREDIS_CPP_DEBUG
+#ifndef REDISWRAPS_DEBUG
 inline
 #endif
 std::string to_string(Token const &item) {
@@ -59,13 +59,13 @@ std::string to_string(Token const &item) {
 }
 
 template<typename TargetType, typename = typename std::enable_if<std::is_default_constructible<TargetType>::value && !std::is_void<TargetType>::value>::type>
-#ifndef HIREDIS_CPP_DEBUG
+#ifndef REDISWRAPS_DEBUG
 inline
 #endif
 TargetType convert(std::string const &target) {
   TargetType new_target;
 
-#ifdef HIREDIS_CPP_DEBUG
+#ifdef REDISWRAPS_DEBUG
   std::cout << "Converting string '" << target << "' to type '" << typeid(TargetType).name() << "'" << std::endl;
 #endif
 
@@ -75,7 +75,7 @@ TargetType convert(std::string const &target) {
 }
 
 template<>
-#ifndef HIREDIS_CPP_DEBUG
+#ifndef REDISWRAPS_DEBUG
 inline
 #endif
 Stash convert<Stash>(std::string const &target) {
@@ -83,7 +83,7 @@ Stash convert<Stash>(std::string const &target) {
 }
 
 template<>
-#ifndef HIREDIS_CPP_DEBUG
+#ifndef REDISWRAPS_DEBUG
 inline
 #endif
 Void convert<Void>(std::string const &target) {
@@ -91,7 +91,7 @@ Void convert<Void>(std::string const &target) {
 }
 
 template<>
-#ifndef HIREDIS_CPP_DEBUG
+#ifndef REDISWRAPS_DEBUG
 inline
 #endif
 bool convert<bool>(std::string const &target) {
@@ -120,7 +120,7 @@ std::string const read_file(std::string const &filepath) {
 } // namespace utils
 
 // DEBUG FUNCTIONS {{{
-#ifdef HIREDIS_CPP_DEBUG
+#ifdef REDISWRAPS_DEBUG
 template<typename Arg>
 inline std::string args_to_string(Arg const &arg) {
   return utils::to_string(arg);
@@ -166,28 +166,28 @@ class Connection {
   // constructors & destructors }}}
 
   // small, inline methods - flush, has_response, & is_connected {{{
-#ifndef HIREDIS_CPP_DEBUG
+#ifndef REDISWRAPS_DEBUG
   inline
 #endif
   void flush() {
     this->responses_ = {};
   }
 
-#ifndef HIREDIS_CPP_DEBUG
+#ifndef REDISWRAPS_DEBUG
   inline
 #endif
   bool const has_response() {
     return !this->responses_.empty();
   }
 
-#ifndef HIREDIS_CPP_DEBUG
+#ifndef REDISWRAPS_DEBUG
   inline
 #endif
   size_t const num_responses() const {
     return this->responses_.size();
   }
 
-#ifndef HIREDIS_CPP_DEBUG
+#ifndef REDISWRAPS_DEBUG
   inline
 #endif
   bool const is_connected() const noexcept {
@@ -247,7 +247,7 @@ class Connection {
     return true;
   }
 
-#ifndef HIREDIS_CPP_DEBUG
+#ifndef REDISWRAPS_DEBUG
   inline
 #endif
   bool const load_lua_script_from_file(
@@ -260,7 +260,7 @@ class Connection {
   }
 
   // shorter alias for the filepath version:
-#ifndef HIREDIS_CPP_DEBUG
+#ifndef REDISWRAPS_DEBUG
   inline
 #endif
   bool const load_lua_script(
@@ -304,7 +304,7 @@ class Connection {
   //    would be discarded and we would only be returned the last one.
   //
   template<typename ReturnType = std::string, typename = typename std::enable_if<!std::is_void<ReturnType>::value>::type, typename... Args>
-#ifndef HIREDIS_CPP_DEBUG
+#ifndef REDISWRAPS_DEBUG
   inline
 #endif
   boost::optional<ReturnType> cmd(std::string const &base, Args&&... args) noexcept {
@@ -328,11 +328,11 @@ class Connection {
   // Cmd()
   // Just like cmd() except returns the actual type OR throws an exception
   template<typename ReturnType = Void, typename = typename std::enable_if<!std::is_void<ReturnType>::value>::type, typename... Args>
-#ifndef HIREDIS_CPP_DEBUG
+#ifndef REDISWRAPS_DEBUG
   inline
 #endif
   ReturnType Cmd(std::string const &base, Args&&... args) {
-#ifdef HIREDIS_CPP_DEBUG
+#ifdef REDISWRAPS_DEBUG
     std::string funcname(__func__);
     funcname += "<";
     funcname += typeid(ReturnType).name();
@@ -347,7 +347,7 @@ class Connection {
 
     auto retval = this->cmd<ReturnType>(base, std::forward<Args>(args)...);
 
-#ifdef HIREDIS_CPP_DEBUG
+#ifdef REDISWRAPS_DEBUG
     std::cout << "Responses after:\n";
     this->print_responses();
 #endif
@@ -363,7 +363,7 @@ class Connection {
 
   // response() {{{
   template<typename ReturnType = std::string>
-#ifndef HIREDIS_CPP_DEBUG
+#ifndef REDISWRAPS_DEBUG
 inline
 #endif
   boost::optional<ReturnType> response(bool const pop_response = true, bool const from_back = false) {
@@ -394,11 +394,11 @@ inline
 
   // Same as response() except returns the actual value or throws an exception
   template<typename ReturnType = std::string>
-#ifndef HIREDIS_CPP_DEBUG
+#ifndef REDISWRAPS_DEBUG
 inline
 #endif
   ReturnType Response(bool const pop_response = true, bool const from_back = false) {
-#ifdef HIREDIS_CPP_DEBUG
+#ifdef REDISWRAPS_DEBUG
     std::string funcname(__func__);
     funcname += "<";
     funcname += typeid(ReturnType).name();
@@ -420,7 +420,7 @@ inline
 
   // last_response() {{{
   template<typename ReturnType = std::string>
-#ifndef HIREDIS_CPP_DEBUG
+#ifndef REDISWRAPS_DEBUG
   inline
 #endif
   boost::optional<ReturnType> last_response(bool const pop_response) {
@@ -478,7 +478,7 @@ inline
     this->context_ = nullptr;
   }
 
-#ifndef HIREDIS_CPP_DEBUG
+#ifndef REDISWRAPS_DEBUG
   inline
 #endif
   void reconnect() {
@@ -575,7 +575,7 @@ inline
 
   // format_cmd_args() {{{
   template<int argc>
-#ifndef HIREDIS_CPP_DEBUG
+#ifndef REDISWRAPS_DEBUG
   inline
 #endif
   void format_cmd_args(
@@ -666,10 +666,10 @@ inline
   std::unordered_map<std::string, std::pair<std::string, size_t>> scripts_ = {};
 };
 
-} // namespace hiredis_cpp
+} // namespace rediswraps
 
-using hiredis_cpp::Stash;
-using hiredis_cpp::Void;
+using rediswraps::Stash;
+using rediswraps::Void;
 
 #endif
 
