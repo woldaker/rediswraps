@@ -1,42 +1,54 @@
-# NOTICE
-#   DO MODIFY THE FOLLOWING VARIABLES FOR YOUR SYSTEM OR PREFERENCES
-#   OR PROVIDE THEM WHEN CALLING MAKE
+### CONFIG {{{
+###
+###   NOTICE :
+###     PLEASE MODIFY THE FOLLOWING VARIABLES FOR YOUR LOCAL SYSTEM AND/OR PREFERENCES,
+###     EITHER HERE OR INLINE WITH MAKE'S INVOCATION (i.e. `make FOO=bar`)
+###
 INC_DIR_HIREDIS ?= /usr/local/include
 LIB_DIR_HIREDIS ?= /usr/local/lib
 INC_DIR_BOOST   ?= $(INC_DIR_HIREDIS)
 LIB_DIR_BOOST   ?= $(LIB_DIR_HIREDIS)
-
-# build switches - value should be 0 or 1
-#   If turned on, test programs will print total execution time just prior to terminating
+###
+### Build Switches
+###
+### Set values to either 0 (OFF) or 1 (ON)
+###
+### BENCHMARK - If on, test programs will print total execution time just prior to terminating
 export BENCHMARK ?= 1
+###
+### CONFIG }}}
 
 
-# WARNING
-#   DO NOT MODIFY ANYTHING PAST THIS POINT
-# Global directories
-export ROOT_DIR := $(CURDIR)
-export  INC_DIR := $(ROOT_DIR)/inc
-export TEST_DIR := $(ROOT_DIR)/test
+# Global Directories
+override REDISWRAPS_ROOT := $(CURDIR)
+export REDISWRAPS_ROOT
+
+INC_DIR  := $(REDISWRAPS_ROOT)/inc
+TEST_DIR := $(REDISWRAPS_ROOT)/test
 
 CFLAGS_INC_DIRS  := $(INC_DIR_HIREDIS) $(if $(subst $(INC_DIR_HIREDIS),,$(INC_DIR_BOOST)),$(INC_DIR_BOOST))
 LDFLAGS_LIB_DIRS := $(LIB_DIR_HIREDIS) $(if $(subst $(LIB_DIR_HIREDIS),,$(LIB_DIR_BOOST)),$(LIB_DIR_BOOST))
-LDFLAGS_LIBS := hiredis $(if $(subst 0,,$(BENCHMARK)),boost_timer)
+LDFLAGS_LIBS     := hiredis $(if $(subst 0,,$(BENCHMARK)),boost_timer)
 
 # Global compiler options
-export CXX            ?= g++
-export CFLAGS         ?= -iquote $(INC_DIR) $(addprefix -I,$(CFLAGS_INC_DIRS))
-export CPPFLAGS       ?= -Wall -Wextra -Wfatal-errors -pedantic-errors
-export CXXFLAGS       ?= -std=c++11
-export OPTFLAGS       ?= -O2
-export DEBUG_OPTFLAGS ?= -g3 -O0 -rdynamic -DREDISWRAPS_DEBUG
-export LDFLAGS        ?= $(addprefix -L,$(LDFLAGS_LIB_DIRS)) $(addprefix -l,$(LDFLAGS_LIBS))
+              CXX ?= g++
+override   CFLAGS += -iquote $(INC_DIR) $(addprefix -I,$(CFLAGS_INC_DIRS))
+override CPPFLAGS += -Wall -Wextra -Wfatal-errors -pedantic
+override CXXFLAGS += -std=c++11
+override  LDFLAGS += $(addprefix -L,$(LDFLAGS_LIB_DIRS)) $(addprefix -l,$(LDFLAGS_LIBS))
+				 OPTFLAGS ?= -O2
+	 DEBUG_OPTFLAGS ?= -ggdb3 -O0 -rdynamic -DREDISWRAPS_DEBUG
 
 # Necessary due to the hiredis library spitting out ugly warnings in combination with
 #   the strict error checking flags I use
-CPPFLAGS += -w
+override CPPFLAGS += -w
+
+export CXX CFLAGS CPPFLAGS CXXFLAGS LDFLAGS OPTFLAGS DEBUG_OPTFLAGS
 
 
 # Targets
+export QUIET := @
+
 % : $(INC_DIR)/rediswraps.hh
 
 
@@ -45,7 +57,7 @@ all : tests
 
 .PHONY: tests
 tests :
-	$(MAKE) -C $(TEST_DIR)
+	$(QUIET) $(MAKE) -C $(TEST_DIR)
 
 
 .PHONY: clean
@@ -53,11 +65,17 @@ clean : tests_clean
 
 .PHONY: tests_clean
 tests_clean :
-	$(MAKE) -C $(TEST_DIR) clean
+	$(QUIET) $(MAKE) -C $(TEST_DIR) clean
 
 
-% :
-	$(MAKE) -C $(TEST_DIR) $@
+# Pass all unknown targets directly to submake
+% ::
+	$(QUIET) $(MAKE) -C $(TEST_DIR) $@
 
+
+# Make settings
 .DEFAULT_GOAL := all
+
+.SILENT:
+.SUFFIXES : .cc .hh
 

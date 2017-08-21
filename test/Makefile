@@ -1,18 +1,28 @@
-# Ensure this Makefile pulls in global config settings and therefore is never
-#   executed directly but rather as a submake
-#
-# ROOT_DIR should be exported from another Makefile
-ROOT_DIR ?= $(CURDIR)
-BIN_DIR := bin
-SRC_DIR := src
-INC_DIR := inc
 
-DIRS_NOT_ADDED_TO_GIT := $(BIN_DIR)
-ensure_dirs_exist := $(shell for d in "$(DIRS_NOT_ADDED_TO_GIT)"; do test -d "${d}" || mkdir -p "${d}"; done)
+# Ensure this Makefile is always executed as a submake
+ifeq ($(MAKELEVEL),0)
+$(error This Makefile must be run as a submake from the project root.)
+endif
 
+# Local Directories
+BIN_DIR := $(CURDIR)/bin
+SRC_DIR := $(CURDIR)/src
+INC_DIR := $(CURDIR)/inc
 
-ifeq ($(CURDIR),$(ROOT_DIR))
-$(error This Makefile must be run as a submake from directory $(abspath $(CURDIR)/..))
+GITIGNORED_DIRS := $(BIN_DIR)
+
+gitignored_dirs_exist := $(shell   \
+  for dir in "$(GITIGNORED_DIRS)";        \
+  do                                      \
+  	test  -d "$${dir}" >/dev/null 2>&1 || \
+    mkdir -p "$${dir}" >/dev/null 2>&1;   \
+	done;                                   \
+	                                        \
+	echo $$?                                \
+)
+
+ifneq ($(gitignored_dirs_exist),0)
+$(error Failed to create the directories required for build: $(foreach dirname,$(GITIGNORED_DIRS),"$(dirname)"))
 endif
 
 
@@ -28,16 +38,16 @@ tests                  := $(addprefix $(BIN_DIR)/,$(targets))
 all clean : $(targets)
 
 clean :
-	@rm -f $(BIN_DIR)/*
+	$(QUIET) rm -f $(BIN_DIR)/*
 
-.PHONY: debug_all
-debug_all : $(debug_targets)
+.PHONY: debug debug_all
+debug debug_all : $(debug_targets)
 
-.PHONY: noexcept_all
-noexcept_all : $(noexcept_targets)
+.PHONY: noexcept noexcept_all
+noexcept noexcept_all : $(noexcept_targets)
 
-.PHONY: debug_noexcept_all
-debug_noexcept_all : $(debug_noexcept_targets)
+.PHONY: debug_noexcept debug_noexcept_all
+debug_noexcept debug_noexcept_all : $(debug_noexcept_targets)
 
 
 .PHONY: $(targets)
@@ -58,8 +68,16 @@ $(debug_noexcept_targets) : debug_noexcept_% : $(BIN_DIR)/%
 
 
 $(tests) : $(BIN_DIR)/% : $(SRC_DIR)/%.cc
-	$(CXX) $(CFLAGS) $(CPPFLAGS) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+	$(QUIET) $(CXX) $(CFLAGS) $(CPPFLAGS) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 
+# Debug target
+print_% : FORCE
+	@echo '$*$(if $(findstring undefined,$(flavor $*)), is undefined,=$($*))'
+
+FORCE : ;
+
+
+# Make settings
 .DEFAULT_GOAL = all
 
