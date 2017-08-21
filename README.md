@@ -1,7 +1,7 @@
 # RedisWraps
 #####    (Beta)
 
-[//]: # (<img src="rediswraps.png?raw=true"/>)
+[//]: # (<img src="logo.png?raw=true"/>)
 
 A simple and intuitive C++ interface to Redis.
 
