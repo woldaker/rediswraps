@@ -3,6 +3,8 @@
 
 [//]: # (<img src="logo.png?raw=true"/>)
 
+[link to Notice section](#notice)
+
 A simple and intuitive C++ interface to Redis.
 
 ### Notice

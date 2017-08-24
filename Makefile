@@ -14,7 +14,7 @@ LIB_DIR_BOOST   ?= $(LIB_DIR_HIREDIS)
 ### Set values to either 0 (OFF) or 1 (ON)
 ###
 ### BENCHMARK - If on, test programs will print total execution time just prior to terminating
-export BENCHMARK ?= 1
+BENCHMARK ?= 1
 ###
 ### CONFIG }}}
 
@@ -30,14 +30,18 @@ CFLAGS_INC_DIRS  := $(INC_DIR_HIREDIS) $(if $(subst $(INC_DIR_HIREDIS),,$(INC_DI
 LDFLAGS_LIB_DIRS := $(LIB_DIR_HIREDIS) $(if $(subst $(LIB_DIR_HIREDIS),,$(LIB_DIR_BOOST)),$(LIB_DIR_BOOST))
 LDFLAGS_LIBS     := hiredis $(if $(subst 0,,$(BENCHMARK)),boost_timer)
 
+
+OPTFLAGS_BENCHMARK := $(if $(subst 0,,$(BENCHMARK)),-DREDISWRAPS_BENCHMARK)
+
 # Global compiler options
-              CXX ?= g++
-override   CFLAGS += -iquote $(INC_DIR) $(addprefix -I,$(CFLAGS_INC_DIRS))
-override CPPFLAGS += -Wall -Wextra -Wfatal-errors -pedantic
-override CXXFLAGS += -std=c++11
-override  LDFLAGS += $(addprefix -L,$(LDFLAGS_LIB_DIRS)) $(addprefix -l,$(LDFLAGS_LIBS))
-				 OPTFLAGS ?= -O2
-	 DEBUG_OPTFLAGS ?= -ggdb3 -O0 -rdynamic -DREDISWRAPS_DEBUG
+override CXX            ?= g++
+override CFLAGS         += -iquote $(INC_DIR) $(addprefix -I,$(CFLAGS_INC_DIRS)) $(OPTFLAGS_BENCHMARK)
+override CPPFLAGS       += -Wall -Wextra -Wfatal-errors -pedantic
+override CXXFLAGS       += -std=c++11
+override LDFLAGS        += $(addprefix -L,$(LDFLAGS_LIB_DIRS)) $(addprefix -l,$(LDFLAGS_LIBS))
+
+override OPTFLAGS       ?= -O2
+override DEBUG_OPTFLAGS ?= -ggdb3 -O0 -rdynamic -DREDISWRAPS_DEBUG
 
 # Necessary due to the hiredis library spitting out ugly warnings in combination with
 #   the strict error checking flags I use
@@ -45,27 +49,15 @@ override CPPFLAGS += -w
 
 export CXX CFLAGS CPPFLAGS CXXFLAGS LDFLAGS OPTFLAGS DEBUG_OPTFLAGS
 
-
 # Targets
 export QUIET := @
 
 % : $(INC_DIR)/rediswraps.hh
 
 
-.PHONY: all
-all : tests
-
-.PHONY: tests
-tests :
-	$(QUIET) $(MAKE) -C $(TEST_DIR)
-
-
-.PHONY: clean
-clean : tests_clean
-
-.PHONY: tests_clean
-tests_clean :
-	$(QUIET) $(MAKE) -C $(TEST_DIR) clean
+.PHONY: all tests
+all tests : % :
+	$(QUIET) $(MAKE) -C $(TEST_DIR) all
 
 
 # Pass all unknown targets directly to submake
@@ -76,6 +68,6 @@ tests_clean :
 # Make settings
 .DEFAULT_GOAL := all
 
-.SILENT:
+#.SILENT:
 .SUFFIXES : .cc .hh
 
