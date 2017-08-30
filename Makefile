@@ -1,4 +1,6 @@
 ### CONFIG {{{
+export QUIET :=
+#export QUIET := @
 ###
 ###   NOTICE :
 ###     PLEASE MODIFY THE FOLLOWING VARIABLES FOR YOUR LOCAL SYSTEM AND/OR PREFERENCES,
@@ -49,12 +51,10 @@ override CPPFLAGS += -w
 
 export CXX CFLAGS CPPFLAGS CXXFLAGS LDFLAGS OPTFLAGS DEBUG_OPTFLAGS
 
-# Targets
-export QUIET := @
 
 % : $(INC_DIR)/rediswraps.hh
 
-
+# Targets
 .PHONY: all tests
 all tests : % :
 	$(QUIET) $(MAKE) -C $(TEST_DIR) all

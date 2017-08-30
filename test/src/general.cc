@@ -51,22 +51,22 @@ int main(int argc, char const *argv[]) {
     test_pdel("c*", 0);
     std::cout << "Keys remaining after issuing command 'pdel \"c*\" :\n";
     redis->cmd("keys", "*RedisWraps*");
-    redis->print_responses();
+    std::cout << *redis << std::endl;
     // ab*c : should delete 1
     test_pdel("ab*c", 1);
     std::cout << "Keys remaining after issuing command 'pdel \"ab*c\" :\n";
     redis->cmd("keys", "*RedisWraps*");
-    redis->print_responses();
+    std::cout << *redis << std::endl;
     // *cd should delete 2
     test_pdel("*cd", 2);
     std::cout << "Keys remaining after issuing command 'pdel \"*cd\" :\n";
     redis->cmd("keys", "*RedisWraps*");
-    redis->print_responses();
+    std::cout << *redis << std::endl;
     // *bRedisWrapsc* should delete all 3
     test_pdel("*b*c*", 3);
     std::cout << "Keys remaining after issuing command 'pdel \"*bRedisWrapsc*\" :\n";
     redis->cmd("keys", "*RedisWraps*");
-    redis->print_responses();
+    std::cout << *redis << std::endl;
 
     // ensure foobar key doesn't exist
     redis->cmd("del", "foobar");

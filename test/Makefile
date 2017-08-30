@@ -43,19 +43,26 @@ all_tests            := $(tests) $(debug_tests) $(noexcept_tests) $(debug_noexce
 .PHONY: all
 all : $(all_targets)
 
-.PHONY: clean rm_bins
-clean : rm_bins all
+
+.PHONY: rm_bins
 rm_bins :
 	$(QUIET) rm -rf $(BIN_DIR)/*
 
-.PHONY: debug debug_all
-debug debug_all : $(debug_targets)
+.PHONY: clean
+clean : rm_bins all
 
-.PHONY: noexcept noexcept_all
-noexcept noexcept_all : $(noexcept_targets)
 
-.PHONY: debug_noexcept debug_noexcept_all
-debug_noexcept debug_noexcept_all : $(debug_noexcept_targets)
+.PHONY: debug
+debug : $(debug_targets)
+
+.PHONY: noexcept
+noexcept : $(noexcept_targets)
+
+.PHONY: debug_noexcept
+debug_noexcept : $(debug_noexcept_targets)
+
+.PHONY: debug_all
+debug_all : debug debug_noexcept
 
 
 .PHONY: $(all_targets)
