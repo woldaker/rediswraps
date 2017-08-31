@@ -7,6 +7,7 @@
 #include <deque>         // Holds all the response strings from Redis
 #include <iostream>
 #include <fstream>       // used in read_file()
+#include <memory>        // typedef for std::unique_ptr<Connection>
 #include <sstream>       // used in read_file()
 #include <string>
 #include <type_traits>   // enable_if<>...
@@ -29,30 +30,196 @@ extern "C" {
 
 namespace rediswraps {
 
-namespace cmdopt { // {{{
-//   Used as a bitmask for behavior in Connection::cmd()
-constexpr unsigned char QUEUE   = (1 << 0);
-constexpr unsigned char DISCARD = (1 << 1);
-constexpr unsigned char FLUSH   = (1 << 2);
-constexpr unsigned char PERSIST = (1 << 3);
+namespace cmd { // {{{
+// Used as a bitmask for behavior in Connection::cmd()
+enum class Flag : uint8_t {
+  // Flush previous responses or keep them
+  FLUSH   = 0x1,
+  PERSIST = 0x2,
+  // Queue response or discard/ignore it
+  QUEUE   = 0x4,
+  DISCARD = 0x8,
 
-constexpr unsigned char QUEUE_FLAGS = (QUEUE | DISCARD);
-constexpr unsigned char FLUSH_FLAGS = (FLUSH | PERSIST);
+  // Just another alias for DEFAULT
+  NONE = 0x0,
 
-constexpr unsigned char DEFAULTS = (QUEUE | FLUSH);
+  // PREDEFINED COMBINATIONS:
+    // DEFAULT = 0x5
+    // Flush old responses and queue these ones.
+    //
+    // For the most basic commands, this should be fine:
+    //   cmd("set", "foo", 123);
+    //   int foo = cmd("get", "foo");
+    //
+    DEFAULT = (FLUSH | QUEUE),
 
-// Verify<FLAGS>() checks flag validity at compile-time
-template<unsigned char Flags>
-void Verify() noexcept {
-  static_assert(cmdopt::QUEUE_FLAGS != (Flags & (cmdopt::QUEUE_FLAGS)),
-    "Setting both CmdOpt flags (QUEUE | DISCARD) is contradictory."
-  );
+    // STASH = 0x6
+    // Keep old responses and also queue these ones.
+    //
+    // Useful for situations such as this:
+    //   cmd("lpush", "my_list", "foobat", "foobas", "foobar");
+    //   cmd("lrange", "my_list", 0, -1);
+    //   while (cmd<STASH>("rpop", "my_list") != "foobar") {...}
+    //
+    STASH = (PERSIST | QUEUE),
 
-  static_assert(cmdopt::FLUSH_FLAGS != (Flags & cmdopt::FLUSH_FLAGS),
-    "Setting both CmdOpt flags (FLUSH | PERSIST) is contradictory."
-  );
+    // CLEAR = 0x9
+    // Flush old responses, also ignore this one.
+    //
+    // Perhaps useful for commands that need a fresh queue before and afterward, or maybe you just don't
+    //   care... or maybe initializing certain keys?... and whose responses can be
+    //   safely ignored for some reason?...
+    // Maybe for stuff like:
+    //
+    //   cmd<CLEAR>("select", 2);
+    //
+    // NOTE: Should be zero responses afterward.  Subsequent attempts to fetch a response will be in error.
+    //   response() -> returns boost::none w/ error msg attached
+    //
+    CLEAR = (FLUSH | DISCARD),
+
+    // VOID = 0xA
+    // Keep old responses but discard these ones.
+    //
+    // Useful for commands that would disrupt the state of the response queue:
+    //   cmd("lpush", "my_list", cmd("rpop", "other_list"));
+    //   cmd("lrange", "my_list", 0, -1);
+    //     You simply cannot wait and MUST delete other_list here:
+    //   cmd<VOID>("del", "other_list")
+    //   
+    //   while(auto queued_response = response()) { do something with queued_response... }
+    //
+    VOID = (PERSIST | DISCARD),
+
+
+  // ILLEGAL OPTIONS: contradictory
+    ILLEGAL_FLUSH_OPTS = (FLUSH | PERSIST), // 0x3
+    ILLEGAL_QUEUE_OPTS = (QUEUE | DISCARD), // 0xC
+    // for completeness:
+    ILLEGAL_FLUSH_OPTS_2 = (ILLEGAL_FLUSH_OPTS | QUEUE),   // 0x7
+    ILLEGAL_FLUSH_OPTS_3 = (ILLEGAL_FLUSH_OPTS | DISCARD), // 0xB
+    ILLEGAL_QUEUE_OPTS_2 = (ILLEGAL_QUEUE_OPTS | FLUSH),   // 0xD
+    ILLEGAL_QUEUE_OPTS_3 = (ILLEGAL_QUEUE_OPTS | PERSIST), // 0xE
+    ILLEGAL_OPTS_ALL     = (ILLEGAL_FLUSH_OPTS | ILLEGAL_QUEUE_OPTS) // 0xF
+};
+
+namespace flag {
+using cmd::Flag;
+using FType = std::underlying_type<Flag>::type;
+
+template<Flag> struct IsLegal;
+template<Flag> struct FlushResponses;
+template<Flag> struct QueueResponses;
+
+template<Flag T> struct IsLegal
+    : std::integral_constant<bool, 
+        static_cast<FType>(T) != (static_cast<FType>(T) & static_cast<FType>(Flag::ILLEGAL_FLUSH_OPTS)) &&
+        static_cast<FType>(T) != (static_cast<FType>(T) & static_cast<FType>(Flag::ILLEGAL_QUEUE_OPTS))
+    >
+{};
+
+template<Flag T> struct FlushResponses
+    : std::integral_constant<bool, 
+        !!(static_cast<FType>(T) & static_cast<FType>(Flag::FLUSH))
+    >
+{};
+
+template<Flag T> struct QueueResponses
+    : std::integral_constant<bool, 
+        !!(static_cast<FType>(T) & static_cast<FType>(Flag::QUEUE))
+      >
+{};
+} // namespace flag
+
+/*
+class Opt {
+ public:
+  INLINE
+  constexpr Opt(Flag const my_flags = Flag::DEFAULT)
+      : flags_(
+          my_flags == Flag::NONE    ||
+          my_flags == Flag::FLUSH   ||
+          my_flags == Flag::PERSIST ||
+          my_flags == Flag::QUEUE   ||
+          my_flags == Flag::DISCARD
+          ?
+          static_cast<Flag>(static_cast<FlagType>(my_flags) & static_cast<FlagType>(Flag::DEFAULT))
+          :
+          my_flags
+        )
+  {
+    static_assert(static_cast<FlagType>(my_flags) != (static_cast<FlagType>(my_flags) | static_cast<FlagType>(Flag::ILLEGAL_FLUSH_OPTS)),
+      "cmd::Opts FLUSH and PERSIST contradict each other and cannot be combined."
+    );
+
+    static_assert(static_cast<FlagType>(my_flags) != (static_cast<FlagType>(my_flags) | static_cast<FlagType>(Flag::ILLEGAL_QUEUE_OPTS)),
+      "cmd::Opts QUEUE and DISCARD contradict each other and cannot be combined."
+    );
+  }
+
+  INLINE
+  constexpr operator FlagType() const noexcept {
+    return static_cast<FlagType>(this->flags());
+  }
+
+  INLINE
+  constexpr bool operator ==(Flag const other_flag) const noexcept {
+    return static_cast<FlagType>(this->flags()) == other_flag;
+  }
+
+  INLINE
+  constexpr bool operator !=(Flag const other_flag) const noexcept {
+    return !(*this == other_flag);
+  }
+
+  INLINE
+  constexpr Opt operator |(Flag const other_flag) const noexcept {
+    return static_cast<FlagType>(this->flags()) | other_flag;
+  }
+
+  INLINE
+  constexpr Opt operator &(Flag const other_flag) const noexcept {
+    return static_cast<FlagType>(this->flags()) & other_flag;
+  }
+
+  INLINE
+  constexpr Opt operator ^(Flag const other_flag) const noexcept {
+    return static_cast<FlagType>(this->flags()) ^ other_flag;
+  }
+
+  INLINE
+  constexpr Opt operator !() const noexcept {
+    return !static_cast<FlagType>(this->flags());
+  }
+
+  INLINE
+  constexpr Flag flags() const noexcept {
+    return this->flags_;
+  }
+
+ private:
+  Flag const flags_;
+}; // class Opt }}}
+
+
+namespace cmdopt {
+using cmd::Opt;
+using cmd::Opt::Flag;
+
+constexpr Opt<Flag::NONE>     None;
+constexpr Opt<Flag::FLUSH>    Flush;
+constexpr Opt<Flag::PERSIST>  Persist;
+constexpr Opt<Flag::QUEUE>    Queue;
+constexpr Opt<Flag::DISCARD>  Discard;
+constexpr Opt<Flag::DEFAULT>  Default;
+constexpr Opt<Flag::STASH>    Stash;
+constexpr Opt<Flag::CLEAR>    Clear;
+constexpr Opt<Flag::VOID>     Void;
 }
-} // namespace cmdopt }}}
+*/
+
+} // namespace cmd }}}
+
 
 namespace CONSTANTS { // {{{
 constexpr char const *NIL = "(nil)";
@@ -70,9 +237,6 @@ namespace DEFAULT { // {{{
 constexpr char const *HOST = "127.0.0.1";
 constexpr int         PORT = 6379;
 } // namespace DEFAULT }}}
-
-struct Void {};
-
 
 // rediswraps::utils {{{
 namespace utils {
@@ -212,10 +376,9 @@ class Response {
   }
   // bool() - two variants }}}
 
+//TODO necessary?
   INLINE
-  operator Void() const& noexcept {
-    return {};
-  }
+  operator void() const noexcept {}
 
 //  INLINE
 //  operator std::string() const noexcept {
@@ -254,8 +417,12 @@ class Response {
 
 
 class Connection { // {{{
+  using ResponseQueueType = std::deque<std::string>;
+
 // public interface {{{
  public:
+  typedef std::unique_ptr<Connection> Ptr;
+
   // constructors & destructors {{{
   Connection(std::string const &host = DEFAULT::HOST, int const port = DEFAULT::PORT, std::string const &name = "")
       : socket_(boost::none),
@@ -295,9 +462,9 @@ class Connection { // {{{
     }
 
     desc += "\n\nQueued Responses : ";
-    desc += this->all_responses();
+    desc += this->responses_to_string();
 
-    desc += "\n\n}";
+    desc += "\n}";
     return desc;
   }
   // description() }}}
@@ -314,7 +481,7 @@ class Connection { // {{{
   }
 
   INLINE
-  size_t const num_responses() const {
+  size_t const num_responses() const noexcept {
     return this->responses_.size();
   }
 
@@ -324,22 +491,22 @@ class Connection { // {{{
   }
 
   INLINE
-  std::string const &name() const noexcept {
+  std::string name() const noexcept {
     return this->name_ ? *this->name_ : CONSTANTS::UNKNOWN_STR;
   }
 
   INLINE
-  std::string const &socket() const noexcept {
+  std::string socket() const noexcept {
     return this->socket_ ? *this->socket_ : CONSTANTS::UNKNOWN_STR;
   }
 
   INLINE
-  std::string const &host() const noexcept {
+  std::string host() const noexcept {
     return this->host_ ? *this->host_ : CONSTANTS::UNKNOWN_STR;
   }
 
   INLINE
-  int const port() const noexcept {
+  int port() const noexcept {
     return this->port_ ? *this->port_ : CONSTANTS::UNKNOWN_INT;
   }
 
@@ -469,17 +636,19 @@ class Connection { // {{{
   //   Both DISCARD and QUEUE are set
   //   Both PERSIST and FLUSH are set
   //
-  template<unsigned char opts = cmdopt::DEFAULTS, typename... Args>
+  template<cmd::Flag flags = cmd::Flag::DEFAULT, typename... Args>
   INLINE
   Connection& cmd(std::string const &base, Args&&... args) noexcept {
-    cmdopt::Verify<opts>();
+    static_assert(cmd::flag::IsLegal<flags>::value,
+      "Illegal combination of cmd::Flag values."
+    );
     
-    if (opts & cmdopt::FLUSH) {
+    if (cmd::flag::FlushResponses<flags>::value) {
       this->flush();
     }
 
     if (this->scripts_.count(base)) {
-      return this->cmd_proxy<opts>(
+      return this->cmd_proxy<flags>(
         "EVALSHA",
         this->scripts_[base].first,
         this->scripts_[base].second,
@@ -487,8 +656,36 @@ class Connection { // {{{
       );
     }
 
-    return this->cmd_proxy<opts>(base, std::forward<Args>(args)...);
+    if (!cmd::flag::QueueResponses<flags>::value) {
+      auto discard_me = this->cmd_proxy<flags>(base, std::forward<Args>(args)...);
+
+      //TODO is this necessary? or should I just return what cmd_proxy returns regardless?
+#ifdef REDISWRAPS_DEBUG
+      if (!discard_me) {
+        std::cerr << "Ignoring error : '" << discard_me << "'" << std::endl;
+      }
+#endif
+
+      return *this;
+    }
+    
+    return this->cmd_proxy<flags>(base, std::forward<Args>(args)...);
   }
+  
+  
+  template<typename T, typename = typename std::enable_if<std::is_void<T>::value>::type, typename... Args>
+  INLINE
+  T cmd(std::string const &base, Args&&... args) noexcept {
+    auto discarded = this->cmd<cmd::Flag::VOID>(base, std::forward<Args>(args)...);
+  }
+    
+ /* 
+  template<unsigned char opts, typename... Args>
+  INLINE
+  void cmd(Args&&... args) noexcept {
+    auto discard_me = this->cmd<cmdopt::QUEUE | (cmdopt::PERSIST | opts)>(std::forward<Args>(args)...);
+  }
+  */
   // cmd() }}}
 
 
@@ -519,11 +716,23 @@ class Connection { // {{{
 
     return response;
   }
+
+  INLINE
+  template<typename T, typename = typename std::enable_if<std::is_void<T>::value>::type>
+  void response(bool const pop_response = true, bool const from_front = false) const noexcept {
+    auto rsp = this->response(pop_response, from_front);
+
+#ifdef REDISWRAPS_DEBUG
+    if (!rsp) {
+      std::cerr << rsp.data() << std::endl;
+    }
+#endif
+  }
   // response() }}}
 
   // last_response() {{{
   //   Returns the most recent Redis response.
-  // Does not pop that response from the front.
+  // Does not pop that response from the front by default.
   // Useful for debugging.
   //
   INLINE
@@ -532,31 +741,60 @@ class Connection { // {{{
   }
   // last_response() }}}
 
+
+  // all_responses() {{{
+  //
+  // Pass in another of the same type of queue as is this->responses_ and it simply copies them all
+  //   into the target queue.
+  INLINE
+  void get_all_responses(ResponseQueueType &target) const {
+#ifdef REDISWRAPS_DEBUG
+    if (!target.empty()) {
+      std::cerr << "WARNING: Copying over non-empty queue with current responses." << std::endl;
+    }
+#endif
+
+    target = this->responses_;
+  }
+
+  // Pass in nothing and it will move the values from the response queue into a new queue which it returns.
+  INLINE
+  std::unique_ptr<ResponseQueueType> get_all_responses() {
+    auto copy_of_responses = std::unique_ptr<ResponseQueueType>{new ResponseQueueType{}};
+
+    this->get_all_responses(*copy_of_responses);
+    this->flush();
+
+    return copy_of_responses;
+  }
+
   // stringification and operator<< {{{
   //   returns all responses in the queue at once, as one big \n-delimited string.
   // Useful for debugging.
-  std::string const &all_responses() const {
-    if (!this->has_response()) {
-      return "{}";
+  std::string responses_to_string() const {
+    std::string desc;
+    
+    if (this->has_response()) {
+      auto tmp_queue(this->responses_);
+
+      for (int i = 0; i < tmp_queue.size(); ++i) {
+        desc += "\n  [";
+        desc += i;
+        desc += "] => '";
+        desc += tmp_queue.front();
+        desc += "'";
+
+        tmp_queue.pop_front();
+      }
     }
 
-    std::string desc("{");
-
-    for (int i = 0; auto response = this->response(); ++i) {
-      desc += "\n\t[";
-      desc += i;
-      desc += "] => '";
-      desc += response.data();
-      desc += "'";
-    }
-
-    return desc += "\n}";
+    return desc;
   }
   
   friend std::ostream& operator<< (std::ostream &os, Connection const &conn);
   // stringification and operator<< }}}
 
-  template<typename T = std::string, typename = typename std::enable_if<!std::is_void<T>::value && !std::is_same<T,Void>::value>::type>
+  template<typename T = std::string, typename = typename std::enable_if<!std::is_void<T>::value>::type>
   INLINE
   operator T() && {
     std::cout << "NON-CONST VERSION" << std::endl;
@@ -564,7 +802,7 @@ class Connection { // {{{
     return utils::convert<T>(this->response());
   }
   
-  template<typename T = std::string, typename = typename std::enable_if<!std::is_void<T>::value && !std::is_same<T,Void>::value>::type>
+  template<typename T = std::string, typename = typename std::enable_if<!std::is_void<T>::value>::type>
   INLINE
   operator T() const& {
     std::cout << "CONST VERSION" << std::endl;
@@ -573,13 +811,9 @@ class Connection { // {{{
   }
 
   INLINE
-  operator void() const& {
+  //template<typename T = void>//, typename = typename std::enable_if<std::is_void<T>::value>::type, typename Dummy = void>
+  operator void() const noexcept {
    std::cout << "void VERSION" << std::endl;
-  }
-
-  INLINE
-  operator Void() const& {
-   std::cout << "VOID VERSION" << std::endl;
   }
 
   template<typename T>
@@ -620,7 +854,11 @@ class Connection { // {{{
 
   INLINE
   bool const operator ==(Connection const &other) const noexcept {
-    return utils::convert<std::string>(this->response(false)) == utils::convert<std::string>(other.response(false));
+    return (this == &other) ||
+      (
+        utils::convert<std::string>(this->response(false)) ==
+        utils::convert<std::string>(other.response(false))
+      );
   }
 // public interface }}}
 
@@ -644,6 +882,9 @@ class Connection { // {{{
         this->context_ = redisConnectUnix(this->socket().c_str());
       }
       else if (this->using_host_and_port()) {
+#ifdef REDISWRAPS_DEBUG
+        std::cout << "host: " << this->host().c_str() << "    port: " << this->port() << std::endl;
+#endif
         this->context_ = redisConnect(this->host().c_str(), this->port());
       }
 
@@ -658,13 +899,17 @@ class Connection { // {{{
       }
 
       if (this->name_) {
-        this->cmd("CLIENT", "SETNAME", this->name());
+        this->cmd<cmd::Flag::CLEAR>("CLIENT", "SETNAME", this->name());
       }
     }
   }
 
   INLINE
   void disconnect() noexcept {
+#ifdef REDISWRAPS_DEBUG
+    std::cout << "RESPONSES @ DISCONNECTION:\n" << this->responses_to_string() << std::endl;
+#endif
+
     if (this->is_connected()) {
       redisFree(this->context_);
     }
@@ -680,7 +925,7 @@ class Connection { // {{{
   // dis/connect() }}}
   
   // parse_reply() {{{
-  template<unsigned char opts/* = cmdopt::DEFAULT*/>
+  template<cmd::Flag flags>
   Response parse_reply(redisReply *&reply, bool const recursion = false) {
     Response response;
     
@@ -728,7 +973,7 @@ class Connection { // {{{
         is_array_reply = true;
 
         for (size_t i = 0; i < reply->elements; ++i) {
-          if (!this->parse_reply<opts>(reply->element[i], true)) {
+          if (!this->parse_reply<flags>(reply->element[i], true)) {
             // if there is an error remove all the successful responses that were pushed
             //  onto the response queue before the error occurred.
             while (i-- > 0) {
@@ -743,7 +988,7 @@ class Connection { // {{{
       }
     }
 
-    if (!is_array_reply && (opts & cmdopt::QUEUE)) {
+    if (!is_array_reply && cmd::flag::QueueResponses<flags>::value) {
       this->responses_.emplace_front(response.data());
     }
 
@@ -784,7 +1029,7 @@ class Connection { // {{{
   // format_cmd_args() }}}
 
   // cmd_proxy() {{{
-  template<unsigned char opts, typename... Args>
+  template<cmd::Flag flags, typename... Args>
   Connection& cmd_proxy(Args&&... args) {
     constexpr int argc = sizeof...(args);
 
@@ -808,8 +1053,8 @@ class Connection { // {{{
       }
 
       if (reconnection_attempted) {
-        if (opts & cmdopt::QUEUE) {
-          this->responses_.emplace_back(
+        if (cmd::flag::QueueResponses<flags>::value) {
+          this->responses_.emplace_front(
             this->context_->err ?
               this->context_->errstr :
               "Redis reply is null and reconnection failed.",
@@ -825,7 +1070,7 @@ class Connection { // {{{
     }
     while (this->reply_ == nullptr);
     
-    this->parse_reply<opts>(this->reply_);
+    this->parse_reply<flags>(this->reply_);
 
     for (int i = 0; i < argc; ++i) {
       delete[] arg_strings[i];
@@ -849,7 +1094,7 @@ class Connection { // {{{
   redisContext *context_ = nullptr;
   redisReply   *reply_   = nullptr;
 
-  mutable std::deque<std::string> responses_ = {};
+  mutable ResponseQueueType responses_ = {};
 
   // scripts_ maps the name of the lua script to the sha hash and the # of
   //   keys the script expects
