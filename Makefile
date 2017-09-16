@@ -1,6 +1,4 @@
 ### CONFIG {{{
-export QUIET :=
-#export QUIET := @
 ###
 ###   NOTICE :
 ###     PLEASE MODIFY THE FOLLOWING VARIABLES FOR YOUR LOCAL SYSTEM AND/OR PREFERENCES,
@@ -15,15 +13,28 @@ LIB_DIR_BOOST   ?= $(LIB_DIR_HIREDIS)
 ###
 ### Set values to either 0 (OFF) or 1 (ON)
 ###
-### BENCHMARK - If on, test programs will print total execution time just prior to terminating
 BENCHMARK ?= 1
+DEBUG     ?= 1
+NOEXCEPT  ?= 0
 ###
 ### CONFIG }}}
 
+# Make 0 values for DEBUG and BENCHMARK into empty strings for ease of use in Makefiles
+override BENCHMARK := $(subst 0,,$(BENCHMARK))
+override DEBUG     := $(subst 0,,$(DEBUG))
+override NOEXCEPT  := $(subst 0,,$(NOEXCEPT))
+export DEBUG
+
+# Global compiler options
+ifneq ($(findstring environment,$(origin QUIET)),)
+$(error Do not set environment variable QUIET directly.  Use variable DEBUG instead.)
+endif
+
+export QUIET := $(if $(DEBUG),,@)
+
 
 # Global Directories
-override REDISWRAPS_ROOT := $(CURDIR)
-export REDISWRAPS_ROOT
+export REDISWRAPS_ROOT := $(CURDIR)
 
 INC_DIR  := $(REDISWRAPS_ROOT)/inc
 TEST_DIR := $(REDISWRAPS_ROOT)/test
@@ -32,42 +43,41 @@ CFLAGS_INC_DIRS  := $(INC_DIR_HIREDIS) $(if $(subst $(INC_DIR_HIREDIS),,$(INC_DI
 LDFLAGS_LIB_DIRS := $(LIB_DIR_HIREDIS) $(if $(subst $(LIB_DIR_HIREDIS),,$(LIB_DIR_BOOST)),$(LIB_DIR_BOOST))
 LDFLAGS_LIBS     := hiredis $(if $(subst 0,,$(BENCHMARK)),boost_timer)
 
-
-OPTFLAGS_BENCHMARK := $(if $(subst 0,,$(BENCHMARK)),-DREDISWRAPS_BENCHMARK)
-
-# Global compiler options
-override CXX            ?= g++
-override CFLAGS         += -iquote $(INC_DIR) $(addprefix -I,$(CFLAGS_INC_DIRS)) $(OPTFLAGS_BENCHMARK)
-override CPPFLAGS       += -Wall -Wextra -Wfatal-errors -pedantic
-override CXXFLAGS       += -std=c++11
-override LDFLAGS        += $(addprefix -L,$(LDFLAGS_LIB_DIRS)) $(addprefix -l,$(LDFLAGS_LIBS))
-
-override OPTFLAGS       ?= -O2
-override DEBUG_OPTFLAGS ?= -ggdb3 -O0 -rdynamic -DREDISWRAPS_DEBUG
-
+override CXX      ?= g++
+# Add compiler -D flags depending on config variables
+override CPPFLAGS ?= $(addprefix -D,$(if $(DEBUG),REDISWRAPS_DEBUG inline_= $(if $(BENCHMARK),REDISWRAPS_BENCHMARK)))
+override CFLAGS   ?= -Wall -Wextra -Wfatal-errors -pedantic -pipe -march=native
 # Necessary due to the hiredis library spitting out ugly warnings in combination with
 #   the strict error checking flags I use
-override CPPFLAGS += -w
+override CFLAGS   += -w
+override CFLAGS   += $(if $(DEBUG),-ggdb3 -O0 -rdynamic,-O2)
+override CPPFLAGS += -iquote $(INC_DIR) $(addprefix -I,$(CFLAGS_INC_DIRS))
+override CXXFLAGS ?= -std=c++11
+override LDFLAGS  ?= $(addprefix -L,$(LDFLAGS_LIB_DIRS)) $(addprefix -l,$(LDFLAGS_LIBS))
 
-export CXX CFLAGS CPPFLAGS CXXFLAGS LDFLAGS OPTFLAGS DEBUG_OPTFLAGS
+export CXX CPPFLAGS CFLAGS CXXFLAGS LDFLAGS
+
+.SUFFIXES : .cpp .cc .hpp .hh
+
+# Make settings
+export .DEFAULT_GOAL := all
+
+ifeq ($(DEBUG),)
+.SILENT:
+endif
 
 
-% : $(INC_DIR)/rediswraps.hh
-
-# Targets
-.PHONY: all tests
-all tests : % :
-	$(QUIET) $(MAKE) -C $(TEST_DIR) all
-
+define PRECOMPILE_CLEAR
+@clear
+@for i in {0..4}; do echo; done
+@echo '  ----------------------------------- make -----------------------------------  '
+@clear
+@echo
+endef
+export PRECOMPILE_CLEAR
 
 # Pass all unknown targets directly to submake
 % ::
 	$(QUIET) $(MAKE) -C $(TEST_DIR) $@
 
-
-# Make settings
-.DEFAULT_GOAL := all
-
-#.SILENT:
-.SUFFIXES : .cc .hh
 

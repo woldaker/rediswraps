@@ -1,6 +1,5 @@
 #ifndef REDISWRAPS_HH
 #define REDISWRAPS_HH
-// VERSION: THROWS
 
 #include <cstring> // strcpy() used in format_cmd_args()
 
@@ -22,9 +21,43 @@ extern "C" {
 #include <hiredis/hiredis.h>
 }
 
-#ifndef inline_
-#define inline_ inline
+#ifdef REDISWRAPS_DEBUG
+//#include <stdexcept>
+
+#define INLINE inline
+#else
+#define INLINE 
 #endif
+
+/*
+// StackFrame {{{
+// 
+// Container for a stack of string descriptions of each point of the real stack frame and
+//   a bool flag to say if 
+// 
+//   
+class StackFrame {
+ public:
+  inline
+  StackFrame() noexcept
+      : StackFrame(CURRENT_FUNCTION_STRING, false)
+  {}
+
+  inline
+  StackFrame(bool const active) noexcept
+      : StackFrame(CURRENT_FUNCTION_STRING, active)
+  {}
+
+  inline
+  StackFrame(std::string &&msg, bool const active = false) noexcept
+      : msg_(msg), active_(active)
+  {}
+
+  template<typename T = std::string, typename = typename std::enable_if<std::is_constructible<T, std::string>::value>::type>
+  operator T() const noexcept {
+};
+//StackFrame }}}
+*/
 
 
 namespace rediswraps {
@@ -131,6 +164,95 @@ template<Flag T> struct QueueResponses
 {};
 } // namespace flag }}}
 
+/*
+// Opt {{{
+class Opt {
+ public:
+  INLINE
+  constexpr Opt(Flag const my_flags = Flag::DEFAULT)
+      : flags_(
+          my_flags == Flag::NONE    ||
+          my_flags == Flag::FLUSH   ||
+          my_flags == Flag::PERSIST ||
+          my_flags == Flag::QUEUE   ||
+          my_flags == Flag::DISCARD
+          ?
+          static_cast<Flag>(static_cast<FlagType>(my_flags) & static_cast<FlagType>(Flag::DEFAULT))
+          :
+          my_flags
+        )
+  {
+    static_assert(static_cast<FlagType>(my_flags) != (static_cast<FlagType>(my_flags) | static_cast<FlagType>(Flag::ILLEGAL_FLUSH_OPTS)),
+      "cmd::Opts FLUSH and PERSIST contradict each other and cannot be combined."
+    );
+
+    static_assert(static_cast<FlagType>(my_flags) != (static_cast<FlagType>(my_flags) | static_cast<FlagType>(Flag::ILLEGAL_QUEUE_OPTS)),
+      "cmd::Opts QUEUE and DISCARD contradict each other and cannot be combined."
+    );
+  }
+
+  INLINE
+  constexpr operator FlagType() const noexcept {
+    return static_cast<FlagType>(this->flags());
+  }
+
+  INLINE
+  constexpr bool operator ==(Flag const other_flag) const noexcept {
+    return static_cast<FlagType>(this->flags()) == other_flag;
+  }
+
+  INLINE
+  constexpr bool operator !=(Flag const other_flag) const noexcept {
+    return !(*this == other_flag);
+  }
+
+  INLINE
+  constexpr Opt operator |(Flag const other_flag) const noexcept {
+    return static_cast<FlagType>(this->flags()) | other_flag;
+  }
+
+  INLINE
+  constexpr Opt operator &(Flag const other_flag) const noexcept {
+    return static_cast<FlagType>(this->flags()) & other_flag;
+  }
+
+  INLINE
+  constexpr Opt operator ^(Flag const other_flag) const noexcept {
+    return static_cast<FlagType>(this->flags()) ^ other_flag;
+  }
+
+  INLINE
+  constexpr Opt operator !() const noexcept {
+    return !static_cast<FlagType>(this->flags());
+  }
+
+  INLINE
+  constexpr Flag flags() const noexcept {
+    return this->flags_;
+  }
+
+ private:
+  Flag const flags_;
+};
+
+
+namespace cmdopt {
+using cmd::Opt;
+using cmd::Opt::Flag;
+
+constexpr Opt<Flag::NONE>     None;
+constexpr Opt<Flag::FLUSH>    Flush;
+constexpr Opt<Flag::PERSIST>  Persist;
+constexpr Opt<Flag::QUEUE>    Queue;
+constexpr Opt<Flag::DISCARD>  Discard;
+constexpr Opt<Flag::DEFAULT>  Default;
+constexpr Opt<Flag::STASH>    Stash;
+constexpr Opt<Flag::CLEAR>    Clear;
+constexpr Opt<Flag::VOID>     Void;
+}
+// class Opt }}}
+*/
+
 } // namespace cmd }}}
 
 
@@ -156,14 +278,16 @@ constexpr int         PORT = 6379;
 namespace utils {
 
 template<typename Token, typename = typename std::enable_if<std::is_constructible<std::string, Token>::value>::type, typename Dummy = void>
-inline_
+INLINE
 std::string to_string(Token const &item) {
+  //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
   return item;
 }
 
 template<typename Token, typename = typename std::enable_if<!std::is_constructible<std::string, Token>::value>::type>
-inline_
+INLINE
 std::string to_string(Token const &item) {
+  //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
   std::string converted;
 
   if (boost::conversion::try_lexical_convert(item, converted)) {
@@ -173,10 +297,29 @@ std::string to_string(Token const &item) {
   return "";
 }
 
+// MORE DEBUG FUNCTIONS {{{
+#ifdef REDISWRAPS_DEBUG
+/*
+template<typename Arg>
+std::string args_to_string(Arg const &arg) {
+  return utils::to_string(arg);
+}
+
+template<typename Arg, typename... Args>
+std::string args_to_string(Arg const &arg, Args&&... args) {
+  std::string arg_string(utils::to_string(arg));
+  arg_string += ", ";
+  return arg_string += args_to_string(std::forward<Args>(args)...);
+}
+*/
+#endif
+// MORE DEBUG FUNCTIONS }}}
+
 
 template<typename TargetType, typename = typename std::enable_if<std::is_default_constructible<TargetType>::value && !std::is_void<TargetType>::value>::type>
-inline_
+INLINE
 TargetType convert(std::string const &target) {
+  //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
   TargetType new_target;
 
 #ifdef REDISWRAPS_DEBUG
@@ -191,8 +334,9 @@ TargetType convert(std::string const &target) {
 }
 
 template<>
-inline_
+INLINE
 bool convert<bool>(std::string const &target) {
+  //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
   return !target.empty() && (target != CONSTANTS::NIL) && (
     (target == CONSTANTS::OK) ||
     // In order to make strings literally containing "true" return true, uncomment the following:
@@ -210,6 +354,7 @@ bool convert<bool>(std::string const &target) {
 
 
 std::string const read_file(std::string const &filepath) {
+  //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
   std::ifstream input(filepath);
   std::stringstream buffer;
 
@@ -220,128 +365,72 @@ std::string const read_file(std::string const &filepath) {
 } // rediswraps::utils }}}
 
 
-// Response classes {{{
+// class Response {{{
 //   Simple wrapper around std::string that adds an error check bool
 class Response {
-  //TODO why do I need to make Connection a friend?
   friend class Connection;
 
  // public {{{
  public:
-  inline_
-  Response() : success_(true) {}
+  INLINE
+  Response() : success_(true) {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+  }
 
   template<typename T>
-  inline_
+  INLINE
   Response(T data, bool success = true)
       : data_(utils::to_string(data)),
         success_(success)
-  {}
-
-/*
-  Response(Response &&other)
-      : data_(other.data_),
-        success_(other.success_)
-  {}
-
-  Response& operator=(Response &&other) {
-    if (this != &other) {
-      this->data_ = other.data_;
-      this->success_ = other.success_;
-    }
+  {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
   }
-  */
-
-/*
-  inline
-  constexpr bool is_array_reply() const noexcept {
-    return false;
-  }
-  */
 
   template<typename T>
-  inline_
-  //explicit
+  INLINE
   operator T() const noexcept {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     return utils::convert<T>(this->data());
   }
 
-  friend std::ostream& operator<<(std::ostream &os, Response const &response);
-
   // bool() -- two variants {{{
   // For L-vals
-  inline_
-  //TODO TRY explicit
-  explicit operator bool() const& noexcept {
+  INLINE
+  operator bool() const& noexcept {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     return this->success();
   }
 
   // For R-vals
-  inline_
-  //TODO TRY explicit
-  explicit operator bool() && noexcept {
+  INLINE
+  operator bool() && noexcept {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     return this->success() && utils::convert<bool>(this->data());
   }
   // bool() - two variants }}}
 
-  inline_
-  operator void() const noexcept {}
+//TODO necessary?
+  INLINE
+  operator void() const noexcept {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+  }
 
+//  INLINE
+//  operator std::string() const noexcept {
+//    return this->data();
+//  }
 
-  inline_
+  INLINE
   std::string const data() const noexcept {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     return this->data_;
   }
   
-  inline_
-  bool success() const noexcept {
+  INLINE
+  bool const success() const noexcept {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     return this->success_;
   }
-
-  inline_
-  bool operator ==(Response const &other) const noexcept {
-    return (this == &other) ||
-    (
-      this->success() == other.success() &&
-      this->data()    == other.data()
-    );
-  }
-  
-  template<typename T>
-  friend bool operator ==(Response const &response, T const &other);
-
-  template<typename T>
-  friend bool operator ==(T const &other, Response const &response);
-  
-  template<typename T>
-  friend bool operator !=(Response const &response, T const &other);
-
-  template<typename T>
-  friend bool operator !=(T const &other, Response const &response);
-  
-  template<typename T>
-  friend bool operator <(Response const &response, T const &other);
-
-  template<typename T>
-  friend bool operator <(T const &other, Response const &response);
-
-  template<typename T>
-  friend bool operator <=(Response const &response, T const &other);
-
-  template<typename T>
-  friend bool operator <=(T const &other, Response const &response);
-
-  template<typename T>
-  friend bool operator >(Response const &response, T const &other);
-
-  template<typename T>
-  friend bool operator >(T const &other, Response const &response);
-
-  template<typename T>
-  friend bool operator >=(Response const &response, T const &other);
-
-  template<typename T>
-  friend bool operator >=(T const &other, Response const &response);
  // public }}}
 
  // private {{{
@@ -350,117 +439,21 @@ class Response {
   bool success_;
 
   template<typename T>
-  inline_
+  INLINE
   void set(T new_data) noexcept {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     this->data_ = utils::to_string(new_data);
   }
 
-  inline_
+  INLINE
   void fail() noexcept {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     this->success_ = false;
   }
  // private }}}
 };
+// class Response }}}
 
-// Response comparison operators {{{
-// operator ==
-template<typename T>
-inline_
-bool operator ==(Response const &response, T const &other) {
-  return utils::convert<T>(response.data()) == other;
-}
-
-template<typename T>
-inline_
-bool operator ==(T const &other, Response const &response) {
-  return utils::convert<T>(response.data()) == other;
-}
-
-// operator <
-template<typename T>
-inline_
-bool operator <(Response const &response, T const &other) {
-  return utils::convert<T>(response.data()) < other;
-}
-
-template<typename T>
-inline_
-bool operator <(T const &other, Response const &response) {
-  return other < utils::convert<T>(response.data());
-}
-
-// operator !=
-template<typename T>
-inline_
-bool operator !=(Response const &response, T const &other) {
-  return !(response == other);
-}
-
-template<typename T>
-inline_
-bool operator !=(T const &other, Response const &response) {
-  return !(other == response);
-}
-
-// opeartor >
-template<typename T>
-inline_
-bool operator >(Response const &response, T const &other) {
-  return !(response < other || response == other);
-}
-
-template<typename T>
-inline_
-bool operator >(T const &other, Response const &response) {
-  return !(other < response || other == response);
-}
-
-// operator <=
-template<typename T>
-inline_
-bool operator <=(Response const &response, T const &other) {
-  return !(response > other);
-}
-
-template<typename T>
-inline_
-bool operator <=(T const &other, Response const &response) {
-  return !(other > response);
-}
-
-// operator >=
-template<typename T>
-inline_
-bool operator >=(Response const &response, T const &other) {
-  return !(response < other);
-}
-
-template<typename T>
-inline_
-bool operator >=(T const &other, Response const &response) {
-  return !(other < response);
-}
-// Response comparison operators }}}
-
-/*
-class ArrayReplyResponse : public Response {
- public:
-  ArrayReplyResponse(bool success = true)
-      : Response("", success)
-  {}
-
-  inline_
-  constexpr bool is_array_reply() const noexcept {
-    return true;
-  }
-};
-*/
-// Response classes }}}
-
-inline_
-std::ostream& operator<<(std::ostream &os, Response const &response) {
-  return os << response.data();
-}
 
 class Connection { // {{{
   using ResponseQueueType = std::deque<std::string>;
@@ -476,6 +469,7 @@ class Connection { // {{{
         port_(boost::make_optional(port > 0, port)),
         name_(boost::make_optional(!name.empty(), name))
   {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     this->connect();
   }
 
@@ -485,43 +479,20 @@ class Connection { // {{{
         port_(boost::none),
         name_(boost::make_optional(!name.empty(), name))
   {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     this->connect();
   }
 
   ~Connection() {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     this->disconnect();
   }
   // constructors & destructors }}}
 
-  // responses_to_string()
-  //   returns all responses in the queue at once, as one big \n-delimited string.
-  // Useful for debugging.
-  std::string responses_to_string() const {
-    std::string desc;
-    
-    if (this->has_response()) {
-      auto tmp_queue(this->responses_);
-
-      for (int i = 0; i < tmp_queue.size(); ++i) {
-        desc += "\n  [";
-        desc += i;
-        desc += "] => '";
-        desc += tmp_queue.front();
-        desc += "'";
-
-        tmp_queue.pop_front();
-      }
-    }
-
-    return desc;
-  }
-  
-  friend std::ostream& operator<< (std::ostream &os, Connection const &conn);
-
-
   // description() {{{
   std::string description() const {
-    std::string desc("Redis Connection {");
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+    std::string desc("RedisWraps Connection {");
     
     desc += "\nName : "; desc += this->name();
 
@@ -533,7 +504,7 @@ class Connection { // {{{
       desc += "\nPort : "; desc += utils::to_string(this->port());
     }
 
-    desc += "\n\nResponse queue : ";
+    desc += "\n\nQueued Responses : ";
     desc += this->responses_to_string();
 
     desc += "\n}";
@@ -541,46 +512,65 @@ class Connection { // {{{
   }
   // description() }}}
 
-  inline_
+  // small, inline methods {{{
+  INLINE
   void flush() {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     this->responses_ = {};
   }
 
-  inline_
-  bool has_response() const noexcept {
+  INLINE
+  bool const has_response() const noexcept {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     return !this->responses_.empty();
   }
 
-  inline_
+  INLINE
   size_t const num_responses() const noexcept {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     return this->responses_.size();
   }
 
-  inline_
-  bool is_connected() const noexcept {
+  INLINE
+  bool const is_connected() const noexcept {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     return !(this->context_ == nullptr || this->context_->err);
   }
 
-  inline_
+  INLINE
   std::string name() const noexcept {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     return this->name_ ? *this->name_ : CONSTANTS::UNKNOWN_STR;
   }
 
-  inline_
+  INLINE
   std::string socket() const noexcept {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     return this->socket_ ? *this->socket_ : CONSTANTS::UNKNOWN_STR;
   }
 
-  inline_
+  INLINE
   std::string host() const noexcept {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     return this->host_ ? *this->host_ : CONSTANTS::UNKNOWN_STR;
   }
 
-  inline_
+  INLINE
   int port() const noexcept {
-    return this->port_ && (*this->port_ > 0) ? *this->port_ : CONSTANTS::UNKNOWN_INT;
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+    return this->port_ ? *this->port_ : CONSTANTS::UNKNOWN_INT;
   }
 
+//  INLINE
+//  int const db() const noexcept {
+//    return this->db_;
+//  }
+
+//  INLINE
+//  bool const is_cluster() const noexcept {
+//    return this->is_cluster_;
+//  }
+  // small, inline methods }}}
 
   // load_lua_script methods {{{
   //
@@ -595,12 +585,13 @@ class Connection { // {{{
   //
   //   this->cmd("foo", "bar", 4, 1.23);
   //
-  bool load_lua_script_from_string(
+  bool const load_lua_script_from_string(
       std::string const &script_contents,
       std::string const &alias,
       size_t const keycount = 0,
-      bool flush_old_scripts = false
+      bool const flush_old_scripts = false
   ) {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     static bool okay_to_flush = true;
 
     if (flush_old_scripts) {
@@ -621,7 +612,8 @@ class Connection { // {{{
 
     std::string const script_hash = this->cmd("SCRIPT", "LOAD", script_contents);
 
-    if (script_hash.empty()) {
+//TODO is this right?
+    if (!script_hash) {
       return false;
     }
 
@@ -633,7 +625,7 @@ class Connection { // {{{
     this->scripts_.emplace(
       alias,
       std::pair<std::string, size_t>(
-        script_hash,
+        *script_hash,
         keycount
       )
     );
@@ -641,24 +633,26 @@ class Connection { // {{{
     return true;
   }
 
-  inline_
-  bool load_lua_script_from_file(
+  INLINE
+  bool const load_lua_script_from_file(
       std::string const &filepath,
       std::string const &alias,
       size_t const keycount = 0,
-      bool flush_old_scripts = false
+      bool const flush_old_scripts = false
   ) {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     return this->load_lua_script_from_string(utils::read_file(filepath), alias, keycount, flush_old_scripts);
   }
 
   // shorter alias for the filepath version:
-  inline_
-  bool load_lua_script(
+  INLINE
+  bool const load_lua_script(
     std::string const &filepath,
     std::string const &alias,
     size_t const keycount = 0,
-    bool flush_old_scripts = false
+    bool const flush_old_scripts = false
   ) {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     return this->load_lua_script_from_file(filepath, alias, keycount, flush_old_scripts);
   }
   // load_lua_script methods }}}
@@ -687,9 +681,12 @@ class Connection { // {{{
   //   Both DISCARD and QUEUE are set
   //   Both PERSIST and FLUSH are set
   //
-  template<cmd::Flag flags = cmd::Flag::DEFAULT, typename RetType = Response, typename... Args>
-  inline_
-  RetType cmd(std::string const &base, Args&&... args) noexcept {
+  template<cmd::Flag flags = cmd::Flag::DEFAULT, typename... Args>
+  INLINE
+  Connection& cmd(std::string const &base, Args&&... args) noexcept {
+    std::cout << "cmd() ----> " << __PRETTY_FUNCTION__ << std::endl;
+    //ADD_STACKFRAME();
+
     static_assert(cmd::flag::IsLegal<flags>::value,
       "Illegal combination of cmd::Flag values."
     );
@@ -698,82 +695,245 @@ class Connection { // {{{
       this->flush();
     }
 
-    Response response = this->scripts_.count(base) ?
-      this->cmd_proxy<flags>(
+    if (this->scripts_.count(base)) {
+      return this->cmd_proxy<flags>(
         "EVALSHA",
         this->scripts_[base].first,
         this->scripts_[base].second,
         std::forward<Args>(args)...
-      )
-    : this->cmd_proxy<flags>(base, std::forward<Args>(args)...);
+      );
+    }
 
-    return static_cast<RetType>(response);
+    if (!cmd::flag::QueueResponses<flags>::value) {
+      auto discard_me = this->cmd_proxy<flags>(base, std::forward<Args>(args)...);
+
+      //TODO is this necessary? or should I just return what cmd_proxy returns regardless?
+#ifdef REDISWRAPS_DEBUG
+      if (!discard_me) {
+        std::cerr << "Ignoring error : '" << discard_me << "'" << std::endl;
+      }
+#endif
+
+      //POP_STACKFRAME();
+      return *this;
+    }
+    
+    return this->cmd_proxy<flags>(base, std::forward<Args>(args)...);
   }
+  
+  
+  template<typename T, typename = typename std::enable_if<std::is_void<T>::value>::type, typename... Args>
+  INLINE
+  T cmd(std::string const &base, Args&&... args) noexcept {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+    auto discarded = this->cmd<cmd::Flag::VOID>(base, std::forward<Args>(args)...);
+  }
+    
+ /* 
+  template<unsigned char opts, typename... Args>
+  INLINE
+  void cmd(Args&&... args) noexcept {
+    auto discard_me = this->cmd<cmdopt::QUEUE | (cmdopt::PERSIST | opts)>(std::forward<Args>(args)...);
+  }
+  */
   // cmd() }}}
 
 
   // response() {{{
-  Response response(bool pop_response = true, bool from_front = false) const noexcept {
-    if (pop_response && from_front) {
-      std::cerr << "WARNING: You are popping from the front of the Redis response queue.  "
-        "This is not recommended.  See RedisWraps README for more details on why this is dangerous."
-      << std::endl;
+  INLINE
+  Response const response(bool const pop_response = true, bool const from_front = false) const noexcept {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+    if (!this->has_response()) {
+      return Response("The Redis response queue is empty.", false);
     }
 
-    if (!this->has_response()) {
-      return Response("Redis has not previously queued any further responses.", false);
+    if (!pop_response) {
+      return Response(from_front ? this->responses_.front() : this->responses_.back());
+    }
+    else if (from_front) {
+      std::cerr << "WARNING: You are popping from the front of the Redis response queue.  "
+        "This is not recommended.  See RedisWraps README."
+      << std::endl;
     }
 
     Response response(from_front ? this->responses_.front() : this->responses_.back());
 
-    if (pop_response) {
-      if (from_front) {
-        this->responses_.pop_front();
-      }
-      else {
-        this->responses_.pop_back();
-      }
+    if (from_front) {
+      this->responses_.pop_front();
+    }
+    else {
+      this->responses_.pop_back();
     }
 
     return response;
   }
 
+  template<typename T, typename = typename std::enable_if<std::is_void<T>::value>::type>
+  INLINE
+  void response(bool const pop_response = true, bool const from_front = false) const noexcept {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+    auto rsp = this->response(pop_response, from_front);
 
-  template<typename RetType, typename = typename std::enable_if<!std::is_same<RetType, Response>::value>::type>
-  inline
-  RetType response(bool pop_response = true, bool from_front = false) const noexcept {
-    return static_cast<RetType>(this->response(pop_response, from_front));
+#ifdef REDISWRAPS_DEBUG
+    if (!rsp) {
+      std::cerr << rsp.data() << std::endl;
+    }
+#endif
   }
   // response() }}}
 
   // last_response() {{{
-  //   Returns the most recent Redis response instead of the oldest, which is what response() returns.
+  //   Returns the most recent Redis response.
   // Does not pop that response from the front by default.
   // Useful for debugging.
   //
-  inline_
-  Response const last_response(bool pop_response = false) const {
+  INLINE
+  Response const last_response(bool const pop_response = false) const {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     return this->response(pop_response, true);
   }
   // last_response() }}}
-// public interface }}}
 
+
+  // all_responses() {{{
+  //
+  // Pass in another of the same type of queue as is this->responses_ and it simply copies them all
+  //   into the target queue.
+  INLINE
+  void get_all_responses(ResponseQueueType &target) const {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+#ifdef REDISWRAPS_DEBUG
+    if (!target.empty()) {
+      std::cerr << "WARNING: Copying over non-empty queue with current responses." << std::endl;
+    }
+#endif
+
+    target = this->responses_;
+  }
+
+  // Pass in nothing and it will move the values from the response queue into a new queue which it returns.
+  INLINE
+  std::unique_ptr<ResponseQueueType> get_all_responses() {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+    auto copy_of_responses = std::unique_ptr<ResponseQueueType>{new ResponseQueueType{}};
+
+    this->get_all_responses(*copy_of_responses);
+    this->flush();
+
+    return copy_of_responses;
+  }
+
+  // stringification and operator<< {{{
+  //   returns all responses in the queue at once, as one big \n-delimited string.
+  // Useful for debugging.
+  std::string responses_to_string() const {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+    std::string desc;
+    
+    if (this->has_response()) {
+      auto tmp_queue(this->responses_);
+
+      for (int i = 0; i < tmp_queue.size(); ++i) {
+        desc += "\n  [";
+        desc += i;
+        desc += "] => '";
+        desc += tmp_queue.front();
+        desc += "'";
+
+        tmp_queue.pop_front();
+      }
+    }
+
+    return desc;
+  }
+  
+  friend std::ostream& operator<< (std::ostream &os, Connection const &conn);
+  // stringification and operator<< }}}
+
+  template<typename T = std::string, typename = typename std::enable_if<!std::is_void<T>::value>::type>
+  INLINE
+  operator T() && {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+    return utils::convert<T>(this->response());
+  }
+  
+  template<typename T = std::string, typename = typename std::enable_if<!std::is_void<T>::value>::type>
+  INLINE
+  operator T() const& {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+    return utils::convert<T>(this->response(false));
+  }
+
+  INLINE
+  //template<typename T = void>//, typename = typename std::enable_if<std::is_void<T>::value>::type, typename Dummy = void>
+  operator void() const noexcept {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+  }
+
+  template<typename T>
+  friend bool const operator ==(Connection const &conn, T const &other);
+
+  template<typename T>
+  friend bool const operator ==(T const &other, Connection const &conn);
+  
+  template<typename T>
+  friend bool const operator !=(Connection const &conn, T const &other);
+
+  template<typename T>
+  friend bool const operator !=(T const &other, Connection const &conn);
+  
+  template<typename T>
+  friend bool const operator <(Connection const &conn, T const &other);
+
+  template<typename T>
+  friend bool const operator <(T const &other, Connection const &conn);
+
+  template<typename T>
+  friend bool const operator <=(Connection const &conn, T const &other);
+
+  template<typename T>
+  friend bool const operator <=(T const &other, Connection const &conn);
+
+  template<typename T>
+  friend bool const operator >(Connection const &conn, T const &other);
+
+  template<typename T>
+  friend bool const operator >(T const &other, Connection const &conn);
+
+  template<typename T>
+  friend bool const operator >=(Connection const &conn, T const &other);
+
+  template<typename T>
+  friend bool const operator >=(T const &other, Connection const &conn);
+
+  INLINE
+  bool const operator ==(Connection const &other) const noexcept {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+    return (this == &other) ||
+      (
+        utils::convert<std::string>(this->response(false)) ==
+        utils::convert<std::string>(other.response(false))
+      );
+  }
+// public interface }}}
 
 // private {{{
  private:
-  inline_
-  bool using_socket() const noexcept {
+  INLINE
+  bool const using_socket() const noexcept {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     return !!this->socket_;
   }
 
-  inline_
-  bool using_host_and_port() const noexcept {
+  INLINE
+  bool const using_host_and_port() const noexcept {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     return (!!this->host_) && (!!this->port_);
   }
 
-
   // dis/re/connect() {{{
   void connect() {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     if (!this->is_connected()) {
       // sockets are fastest, try that first
       if (this->using_socket()) {
@@ -802,12 +962,11 @@ class Connection { // {{{
     }
   }
 
-  inline_
+  INLINE
   void disconnect() noexcept {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
 #ifdef REDISWRAPS_DEBUG
-    if (this->has_response()) {
-      std::cout << "RESPONSES @ DISCONNECTION:\n" << this->responses_to_string() << std::endl;
-    }
+    std::cout << "RESPONSES @ DISCONNECTION:\n" << this->responses_to_string() << std::endl;
 #endif
 
     if (this->is_connected()) {
@@ -817,17 +976,18 @@ class Connection { // {{{
     this->context_ = nullptr;
   }
 
-  inline_
+  INLINE
   void reconnect() {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     this->disconnect();
     this->connect();
   }
   // dis/connect() }}}
   
-
   // parse_reply() {{{
   template<cmd::Flag flags>
   Response parse_reply(redisReply *&reply, bool const recursion = false) {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     Response response;
     
     // There is a corner case where we never want to stash the response:
@@ -874,10 +1034,9 @@ class Connection { // {{{
         is_array_reply = true;
 
         for (size_t i = 0; i < reply->elements; ++i) {
-          Response tmp;
-          if (!(tmp = this->parse_reply<flags>(reply->element[i], true))) {
-            std::cerr << "ERROR RESPONSE: " << tmp << std::endl;
-
+          if (!this->parse_reply<flags>(reply->element[i], true)) {
+            // if there is an error remove all the successful responses that were pushed
+            //  onto the response queue before the error occurred.
             while (i-- > 0) {
               this->responses_.pop_back();
             }
@@ -890,11 +1049,8 @@ class Connection { // {{{
       }
     }
 
-    std::cout << "Is array reply: " << (is_array_reply ? "true" : "false") << "    queue responses: " << (cmd::flag::QueueResponses<flags>::value ? "true" : "false") << std::endl;
     if (!is_array_reply && cmd::flag::QueueResponses<flags>::value) {
-      std::cout << "Emplacing '" << response.data() << "' onto responses queue." << std::endl;
       this->responses_.emplace_front(response.data());
-      std::cout << "There are now " << this->num_responses() << " responses queued." << std::endl;
     }
 
     if (!recursion) {
@@ -905,14 +1061,15 @@ class Connection { // {{{
   }
   // parse_reply() }}}
 
-
   // format_cmd_args() {{{
   template<int argc>
-  inline_
+  INLINE
   void format_cmd_args(
     std::array<char*, argc> &&arg_strings,
     int const args_index
-  ) {}
+  ) {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+  }
 
   template<int argc, typename Arg, typename... Args>
   void format_cmd_args(
@@ -921,6 +1078,8 @@ class Connection { // {{{
     Arg const &arg,
     Args&&... args
   ) {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+
     this->format_cmd_args<argc>(
       std::forward<std::array<char*, argc>>(arg_strings),
       (args_index + 1),
@@ -934,15 +1093,14 @@ class Connection { // {{{
   }
   // format_cmd_args() }}}
 
-
   // cmd_proxy() {{{
   template<cmd::Flag flags, typename... Args>
-  Response cmd_proxy(Args&&... args) {
+  Connection& cmd_proxy(Args&&... args) {
+    //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
     constexpr int argc = sizeof...(args);
 
     std::array<char*, argc> arg_strings;
 
-    // TODO fix this to use RAII instead of new and delete[] on char arrays
     this->format_cmd_args<argc>(
       std::forward<std::array<char*, argc>>(arg_strings),
       0,
@@ -961,12 +1119,16 @@ class Connection { // {{{
       }
 
       if (reconnection_attempted) {
-        return Response(
-          this->context_->err ?
-            this->context_->errstr :
-            "Redis reply is null and reconnection failed.",
-          false
-        );
+        if (cmd::flag::QueueResponses<flags>::value) {
+          this->responses_.emplace_front(
+            this->context_->err ?
+              this->context_->errstr :
+              "Redis reply is null and reconnection failed.",
+            false
+          );
+        }
+
+        return *this;
       }
 
       this->reconnect();
@@ -974,22 +1136,26 @@ class Connection { // {{{
     }
     while (this->reply_ == nullptr);
     
-    auto response = this->parse_reply<flags>(this->reply_);
+    this->parse_reply<flags>(this->reply_);
 
     for (int i = 0; i < argc; ++i) {
       delete[] arg_strings[i];
     }
 
-    return response;
+    return *this;
   }
   // cmd_proxy() }}}
-
 
   // member variables {{{
   boost::optional<std::string> socket_;
   boost::optional<std::string> host_;
   boost::optional<int>         port_;
-  boost::optional<std::string> name_;
+  boost::optional<std::string> const name_;
+
+/*
+  bool is_cluster_;
+  int db_;
+*/
 
   redisContext *context_ = nullptr;
   redisReply   *reply_   = nullptr;
@@ -1004,12 +1170,109 @@ class Connection { // {{{
 };
 // class Connection }}}
 
-
-inline_ std::ostream& operator<< (std::ostream &os, Connection const &conn) {
+INLINE std::ostream& operator<< (std::ostream &os, Connection const &conn) {
+  //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
   return os << conn.description();
 }
 
+// operator ==
+template<typename T>
+INLINE
+bool const operator ==(Connection const &conn, T const &other) {
+  //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+  auto response = conn.response(false);
+  return response && (utils::convert<T>(response.data()) == other);
+}
+
+template<typename T>
+INLINE
+bool const operator ==(T const &other, Connection const &conn) {
+  //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+  auto response = conn.response(false);
+  return response && (other == utils::convert<T>(response.data()));
+}
+
+// operator <
+template<typename T>
+INLINE
+bool const operator <(Connection const &conn, T const &other) {
+  //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+  auto response = conn.response(false);
+  return response && (utils::convert<T>(response.data()) < other);
+}
+
+template<typename T>
+INLINE
+bool const operator <(T const &other, Connection const &conn) {
+  //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+  auto response = conn.response(false);
+  return response && (other < utils::convert<T>(response.data()));
+}
+
+// operator !=
+template<typename T>
+INLINE
+bool const operator !=(Connection const &conn, T const &other) {
+  //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+  return !(conn == other);
+}
+
+template<typename T>
+INLINE
+bool const operator !=(T const &other, Connection const &conn) {
+  //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+  return !(other == conn);
+}
+
+// opeartor >
+template<typename T>
+INLINE
+bool const operator >(Connection const &conn, T const &other) {
+  //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+  return !(conn < other || conn == other);
+}
+
+template<typename T>
+INLINE
+bool const operator >(T const &other, Connection const &conn) {
+  //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+  return !(other < conn || other == conn);
+}
+
+// operator <=
+template<typename T>
+INLINE
+bool const operator <=(Connection const &conn, T const &other) {
+  //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+  return !(conn > other);
+}
+
+template<typename T>
+INLINE
+bool const operator <=(T const &other, Connection const &conn) {
+  //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+  return !(other > conn);
+}
+
+// operator >=
+template<typename T>
+INLINE
+bool const operator >=(Connection const &conn, T const &other) {
+  //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+  return !(conn < other);
+}
+
+template<typename T>
+INLINE
+bool const operator >=(T const &other, Connection const &conn) {
+  //std::cout << "----> " << __PRETTY_FUNCTION__ << std::endl;
+  return !(other < conn);
+}
+
 } // namespace rediswraps
+
+//TODO get rid of this macro
+//#undef INLINE
 
 #endif
 

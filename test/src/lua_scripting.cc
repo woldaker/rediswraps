@@ -23,7 +23,7 @@ int main(int argc, char const *argv[]) {
 //////////////////////////////////////////////////////
 #endif
 
-  thread_local std::unique_ptr<Connection> redis(new Connection("127.0.0.1", 6379));
+  thread_local Connection::Ptr redis(new Connection("127.0.0.1", 6379));
 
   int const test_len = (argc >= 2 ? utils::convert<int>(argv[1]) : DEFAULT_TEST_LEN);
 

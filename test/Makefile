@@ -3,17 +3,19 @@ ifeq ($(MAKELEVEL),0)
 $(error This Makefile must be run as a submake from the project root.)
 endif
 
-TEST_BIN_PREFIX := rediswraps_test
+TEST_PREFIX := rrtest_
+CATCH_BASE := CATCH_BASE
 
 # Local Directories
 BIN_DIR := $(CURDIR)/bin
 SRC_DIR := $(CURDIR)/src
+OBJ_DIR := $(CURDIR)/obj
 INC_DIR := $(CURDIR)/inc
 
-GITIGNORED_DIRS := $(BIN_DIR)
+GITIGNORED_DIRS := $(BIN_DIR) $(OBJ_DIR)
 
 gitignored_dirs_exist := $(shell          \
-  for dir in "$(GITIGNORED_DIRS)";        \
+  for dir in $(GITIGNORED_DIRS);          \
   do                                      \
   	test  -d "$${dir}" >/dev/null 2>&1 || \
     mkdir -p "$${dir}" >/dev/null 2>&1;   \
@@ -23,72 +25,71 @@ gitignored_dirs_exist := $(shell          \
 )
 
 ifneq ($(gitignored_dirs_exist),0)
-$(error Failed to create the directories required for build: $(foreach dirname,$(GITIGNORED_DIRS),"$(dirname)"))
+$(error Failed to create the directories required for build: $(foreach dirname,$(GITIGNORED_DIRS),"$(dirname)/"))
 endif
 
+# targets variable includes all tests in src/ except the catchlib base
+all_targets   := $(filter-out $(CATCH_BASE),$(patsubst $(SRC_DIR)/%.cc,%,$(wildcard $(SRC_DIR)/*.cc)))
+catch_targets := $(filter-out $(CATCH_BASE),$(patsubst $(SRC_DIR)/%.cc,%,$(wildcard $(SRC_DIR)/catch_*.cc)))
+targets       := $(filter-out $(catch_targets),$(all_targets))
+tests         := $(addprefix $(BIN_DIR)/$(TEST_PREFIX),$(targets))
+catch_tests   := $(addprefix $(BIN_DIR)/$(TEST_PREFIX),$(catch_targets))
 
-# Targets
-targets                := $(patsubst $(SRC_DIR)/%.cc,%,$(wildcard $(SRC_DIR)/*.cc))
-debug_targets          := $(addprefix debug_,$(targets))
-noexcept_targets       := $(addprefix noexcept_,$(targets))
-debug_noexcept_targets := $(addprefix debug_noexcept_,$(targets))
-all_targets            := $(targets) $(debug_targets) $(noexcept_targets) $(debug_noexcept_targets)
+# All targets depend on our header
+% : $(INC_DIR)/rediswraps.hh
 
-tests                := $(addprefix $(BIN_DIR)/,$(addprefix $(TEST_BIN_PREFIX)_,$(targets)))
-debug_tests          := $(addprefix $(BIN_DIR)/,$(addprefix $(TEST_BIN_PREFIX)_,$(debug_targets)))
-noexcept_tests       := $(addprefix $(BIN_DIR)/,$(addprefix $(TEST_BIN_PREFIX)_,$(noexcept_targets)))
-debug_noexcept_tests := $(addprefix $(BIN_DIR)/,$(addprefix $(TEST_BIN_PREFIX)_,$(debug_noexcept_targets)))
-all_tests            := $(tests) $(debug_tests) $(noexcept_tests) $(debug_noexcept_tests)
+
+# This version of INC_DIR is test/inc, which includes more than
+#   just the rediswraps.hh headers
+override CPPFLAGS += -iquote $(INC_DIR)
+
 
 .PHONY: all
 all : $(all_targets)
-
 
 .PHONY: rm_bins
 rm_bins :
 	$(QUIET) rm -rf $(BIN_DIR)/*
 
+.PHONY: rm_objs
+rm_objs :
+	$(QUIET) rm -rf $(OBJ_DIR)/*
+
 .PHONY: clean
-clean : rm_bins all
+clean : rm_bins rm_objs all
 
 
-.PHONY: debug
-debug : $(debug_targets)
-
-.PHONY: noexcept
-noexcept : $(noexcept_targets)
-
-.PHONY: debug_noexcept
-debug_noexcept : $(debug_noexcept_targets)
-
-.PHONY: debug_all
-debug_all : debug debug_noexcept
-
+# all catch targets depend on the catchlib main() being made
+.PHONY: $(CATCH_BASE)
+$(CATCH_BASE) : $(OBJ_DIR)/$(CATCH_BASE).o
 
 .PHONY: $(all_targets)
-$(targets)                : CFLAGS += $(OPTFLAGS)
-$(debug_targets)          : CFLAGS += $(DEBUG_OPTFLAGS)
-$(noexcept_targets)       : CFLAGS += $(OPTFLAGS)       -DREDISWRAPS_NOEXCEPT
-$(debug_noexcept_targets) : CFLAGS += $(DEBUG_OPTFLAGS) -DREDISWRAPS_NOEXCEPT
-$(all_targets) : % : $(BIN_DIR)/$(TEST_BIN_PREFIX)_%
+$(catch_targets) : $(CATCH_BASE)
+
+$(all_targets) : $(INC_DIR)/utils.hh
+
+$(all_targets) : % : $(BIN_DIR)/$(TEST_PREFIX)%
+ifneq ($(DEBUG),)
 	$(info Made target $@)
+endif
+
+
+$(OBJ_DIR)/$(CATCH_BASE).o : $(SRC_DIR)/$(CATCH_BASE).cc
+	$(QUIET) $(CXX) $(CPPFLAGS) $(CFLAGS) $(CXXFLAGS) $^ -c -o $@
+
 
 # final compilation
-$(tests)                : $(BIN_DIR)/$(TEST_BIN_PREFIX)_%                : $(SRC_DIR)/%.cc
-$(debug_tests)          : $(BIN_DIR)/$(TEST_BIN_PREFIX)_debug_%          : $(SRC_DIR)/%.cc
-$(noexcept_tests)       : $(BIN_DIR)/$(TEST_BIN_PREFIX)_noexcept_%       : $(SRC_DIR)/%.cc
-$(debug_noexcept_tests) : $(BIN_DIR)/$(TEST_BIN_PREFIX)_debug_noexcept_% : $(SRC_DIR)/%.cc
-$(all_tests) : % :
+$(tests) : $(BIN_DIR)/$(TEST_PREFIX)% : $(SRC_DIR)/%.cc
+	$(PRECOMPILE_CLEAR)
+	$(QUIET) $(CXX) $(CFLAGS) $(CPPFLAGS) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+
+$(catch_tests) : $(BIN_DIR)/$(TEST_PREFIX)% : $(OBJ_DIR)/$(CATCH_BASE).o $(SRC_DIR)/%.cc
+	$(PRECOMPILE_CLEAR)
 	$(QUIET) $(CXX) $(CFLAGS) $(CPPFLAGS) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 
-# Debug target
-print_% : FORCE
+# For debugging variables exported to this makefile or defined locally
+print_% : ;
 	@echo '$*$(if $(findstring undefined,$(flavor $*)), is undefined,=$($*))'
 
-FORCE : ;
-
-
-# Make settings
-.DEFAULT_GOAL = all
 
