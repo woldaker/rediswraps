@@ -179,10 +179,6 @@ inline_
 TargetType convert(std::string const &target) {
   TargetType new_target;
 
-#ifdef REDISWRAPS_DEBUG
-  std::cout << "Converting string '" << target << "' to type '" << typeid(TargetType).name() << "'" << std::endl;
-#endif
-
   if (boost::conversion::try_lexical_convert(target, new_target)) {
     return new_target;
   }
@@ -780,9 +776,6 @@ class Connection { // {{{
         this->context_ = redisConnectUnix(this->socket().c_str());
       }
       else if (this->using_host_and_port()) {
-#ifdef REDISWRAPS_DEBUG
-        std::cout << "host: " << this->host().c_str() << "    port: " << this->port() << std::endl;
-#endif
         this->context_ = redisConnect(this->host().c_str(), this->port());
       }
 
@@ -804,12 +797,6 @@ class Connection { // {{{
 
   inline_
   void disconnect() noexcept {
-#ifdef REDISWRAPS_DEBUG
-    if (this->has_response()) {
-      std::cout << "RESPONSES @ DISCONNECTION:\n" << this->responses_to_string() << std::endl;
-    }
-#endif
-
     if (this->is_connected()) {
       redisFree(this->context_);
     }
@@ -890,11 +877,8 @@ class Connection { // {{{
       }
     }
 
-    std::cout << "Is array reply: " << (is_array_reply ? "true" : "false") << "    queue responses: " << (cmd::flag::QueueResponses<flags>::value ? "true" : "false") << std::endl;
     if (!is_array_reply && cmd::flag::QueueResponses<flags>::value) {
-      std::cout << "Emplacing '" << response.data() << "' onto responses queue." << std::endl;
       this->responses_.emplace_front(response.data());
-      std::cout << "There are now " << this->num_responses() << " responses queued." << std::endl;
     }
 
     if (!recursion) {

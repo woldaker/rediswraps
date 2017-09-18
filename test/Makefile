@@ -66,8 +66,6 @@ $(CATCH_BASE) : $(OBJ_DIR)/$(CATCH_BASE).o
 .PHONY: $(all_targets)
 $(catch_targets) : $(CATCH_BASE)
 
-$(all_targets) : $(INC_DIR)/utils.hh
-
 $(all_targets) : % : $(BIN_DIR)/$(TEST_PREFIX)%
 ifneq ($(DEBUG),)
 	$(info Made target $@)
