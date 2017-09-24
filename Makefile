@@ -60,7 +60,8 @@ export CXX CPPFLAGS CFLAGS CXXFLAGS LDFLAGS
 .SUFFIXES : .cpp .cc .hpp .hh
 
 # Make settings
-export .DEFAULT_GOAL := all
+export .DEFAULT_GOAL ?= all
+
 
 ifeq ($(DEBUG),)
 .SILENT:

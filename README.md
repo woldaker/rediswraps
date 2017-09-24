@@ -1,116 +1,144 @@
+<img src="logo.png" alt="RedisWraps logo" style="float: left; margin-right: 2em;">
+<br/>
 # RedisWraps
-#####    (Beta)
+<br/>
+### A simple and intuitive single-header C++ interface for Redis.
+ 
 
-[//]: # (<img src="logo.png?raw=true"/>)
-
-[link to Notice section](#notice)
-
-A simple and intuitive C++ interface to Redis.
-
-### Notice
-
-This project is very young and has several features waiting to be implemented.
-More info on each is marked by a **`TODO`** tag and provided in its most relevant section below.
-
-### Prerequisites
-
-- C++11 capable compiler
+## Prerequisites
+- Compiler with C++11 support
 - [hiredis][hiredis_link]
-+ [Boost][boost_link] headers:
-    - [lexical cast][lexical_cast_link]
-    - [optional][optional_link]
++ [Boost][boost_link] (specifically [boost::lexical cast][lexical_cast_link])
 
-### How to use it
+## How to use it
 
-All RedisWraps code is contained in **`namespace rediswraps`**
-All the functionality needed to send and receive commands to/from Redis is encapsulated in either **`class rediswraps::Connection`** or **`class rediswraps::ConnectionNoThrow`**
+#### Include header and create a connection
 
-<TODO>
-
-Therefore, in your source, just add:
-**`#include "rediswraps.hh"`**
-
-  and either use it directly or make an alias (as done in the [Examples](#examples)):
-**`using Redis = rediswraps::Connection;`**
-
-The build should then look something like this:
-`g++ `**`-std=c++11 -I/dir/containing/boost/headers -L/dir/containing/hiredis/lib`**` your_program.cc -o YourProgram `**`-lhiredis`**
-
-### Examples
-
-#### Creating a Connection
-```c++
+```
+#include "rediswraps.hh"
 using Redis = rediswraps::Connection;
-std::unique_ptr<Redis> redis(new Redis("127.0.0.1", 6379));
+
+std::unique_ptr<Redis> redis;
+
+// Construct with ("IP", port) or ("path/to/socket")
+try {
+	redis.reset(new Redis("66.215.238.186", 6379));
+} catch (...) {/* handle error */}
 ```
 
-> Constructor is overloaded to take the path to a socket as well.
-> You could allocate it on the stack if you wish... I just prefer using std::unique\_ptr.
+#### Issue commands with cmd("name", args...)
 
-#### Sending commands
-At the core of sending commands and receiving responses are the functions:
-**`cmd<ReturnType>(...)`**
-and
-**`response<ReturnType>()`**
-
-If no ReturnType is specified, the 
-```
-redis->cmd("
-
-
-## Running the tests
-
-Explain how to run the automated tests for this system
-
-### Break down into end to end tests
-
-Explain what these tests test and why
+Args are automatically converted to strings.
+May be of any fundamental type or any type with implicit conversion to std::string defined.
 
 ```
-Give an example
+struct Foo {
+	operator std::string() const { return "foo"; }
+};
+Foo foo;
+
+redis->cmd("mset", foo, 123, "bar", 4.56, "gaz", true);
 ```
 
-### And coding style tests
+#### Get responses in a few different ways:
 
-Explain what these tests test and why
+##### Capture at the callpoint - assigning to type
+You can just assign the result of *cmd( )* to any variable that makes sense to convert from string:
 
 ```
-Give an example
+int    fooval = redis->cmd("get", "foo");
+float  barval = redis->cmd("get", "bar");
+bool   gazval = redis->cmd("get", "gaz");
+
+assert(fooval == 123);  // true
+assert(barval == 4.56); // true
+assert(gazval == true); // true
 ```
 
-## Deployment
+##### Capture at the callpoint - inline
 
-Add additional notes about how to deploy this on a live system
+```
+assert(redis->cmd("get", "foo") == 123);  // true
+assert(redis->cmd("get", "bar") == 4.56); // true
+assert(redis->cmd("get", "gaz") == true); // true
+```
 
-## Built With
+Even works correctly when using the reply as a boolean:
 
-* [Dropwizard](http://www.dropwizard.io/1.0.2/docs/) - The web framework used
-* [Maven](https://maven.apache.org/) - Dependency Management
-* [ROME](https://rometools.github.io/rome/) - Used to generate RSS Feeds
+```
+assert(redis->cmd("get", "gaz")); // true
+assert(redis->cmd("gett", "gaz")); // false - prints "ERR unknown command 'gett'"
+redis->cmd("set", "gaz", false);
+assert(!redis->cmd("get", "gaz")); // true!  It works here as well
+assert(!redis->cmd("gert", "gaz")); // false - prints "ERR unknown command 'gert'"
+```
 
-## Contributing
+##### Loop through multiple replies with response( )
 
-Please read [CONTRIBUTING.md](https://gist.github.com/PurpleBooth/b24679402957c63ec426) for details on our code of conduct, and the process for submitting pull requests to us.
+```
+redis->cmd("rpush", "mylist", 1, "2", "3.4");
+redis->cmd("lrange", "mylist", 0, -1);
+
+// NOTE: Any calls to cmd() here will destroy the results of the lrange call
+
+while (auto listval = redis->response()) {
+	std::cout << listval << std::endl;
+}
+
+// Prints:
+// 1
+// 2
+// 3.4
+```
+
+#### Load new commands from a Lua script:
+```
+redis->cmd("mycmd", "mylist", "foobar");
+// prints "ERR unknown command 'mycmd'"
+
+redis->load_script("mycmd", "/path/to/script.lua", 1);
+// 3rd arg is # of KEYS[] to expect:
+
+redis->cmd("mycmd", "mylist", "foobar");
+
+// or load it inline:
+//   Notice that the 3rd argument defaults to zero.
+redis->load_script_from_string("pointless", 
+	"return redis.call('ECHO', 'pointless cmd')"
+);
+redis->cmd("pointless");
+// prints 'pointless cmd'
+```
+
+## Build
+
+##### The build should look something like this.  Additional changes required are in bold.
+When building an object that uses it:
+
+`g++`**`-std=c++11 -I/path/to/boost/headers`**`-c your\_obj.cc -o your\_obj.o`
+
+When linking a binary that uses it:
+
+`g++`**`-std=c++11 -I/path/to/boost/headers -L/dir/containing/libhiredis.so`**`your_program.cc -o YourProgram`**`-lhiredis`**
+
+## TODO
+
+#### This project is very young and has quite a few features that are still missing:
+
+
+### Contributing
+
 
 ## Versioning
 
-We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/your/project/tags). 
 
 ## Authors
 
-* **Billie Thompson** - *Initial work* - [PurpleBooth](https://github.com/PurpleBooth)
-
-See also the list of [contributors](https://github.com/your/project/contributors) who participated in this project.
+* **Wesley Oldaker** - *Initial work* - [WesleyOldaker](https://github.com/woldaker)
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
-
-## Acknowledgments
-
-* Hat tip to anyone who's code was used
-* Inspiration
-* etc
+This project is licensed under the ?
 
 <links>
 [hiredis_link]:      https://github.com/redis/hiredis                         "hiredis"

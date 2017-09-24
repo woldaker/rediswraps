@@ -234,30 +234,8 @@ class Response {
         success_(success)
   {}
 
-/*
-  Response(Response &&other)
-      : data_(other.data_),
-        success_(other.success_)
-  {}
-
-  Response& operator=(Response &&other) {
-    if (this != &other) {
-      this->data_ = other.data_;
-      this->success_ = other.success_;
-    }
-  }
-  */
-
-/*
-  inline
-  constexpr bool is_array_reply() const noexcept {
-    return false;
-  }
-  */
-
   template<typename T>
   inline_
-  //explicit
   operator T() const noexcept {
     return utils::convert<T>(this->data());
   }
@@ -303,41 +281,101 @@ class Response {
     );
   }
   
-  template<typename T>
-  friend bool operator ==(Response const &response, T const &other);
+// Response comparison operators {{{
+// operator ==
+template<typename T>
+inline_
+friend bool operator ==(Response const &response, T const &other) {
+  if (std::is_same<T, double>::value) {
+    return response == float(other);
+  }
 
-  template<typename T>
-  friend bool operator ==(T const &other, Response const &response);
-  
-  template<typename T>
-  friend bool operator !=(Response const &response, T const &other);
+  return utils::convert<T>(response.data()) == other;
+}
 
-  template<typename T>
-  friend bool operator !=(T const &other, Response const &response);
-  
-  template<typename T>
-  friend bool operator <(Response const &response, T const &other);
+template<typename T>
+inline_
+friend bool operator ==(T const &other, Response const &response) {
+  if (std::is_same<T, double>::value) {
+    return response == float(other);
+  }
 
-  template<typename T>
-  friend bool operator <(T const &other, Response const &response);
+  return utils::convert<T>(response.data()) == other;
+}
 
-  template<typename T>
-  friend bool operator <=(Response const &response, T const &other);
+// operator <
+template<typename T>
+inline_
+friend bool operator <(Response const &response, T const &other) {
+  if (std::is_same<T, double>::value) {
+    return response < float(other);
+  }
 
-  template<typename T>
-  friend bool operator <=(T const &other, Response const &response);
+  return utils::convert<T>(response.data()) < other;
+}
 
-  template<typename T>
-  friend bool operator >(Response const &response, T const &other);
+template<typename T>
+inline_
+friend bool operator <(T const &other, Response const &response) {
+  if (std::is_same<T, double>::value) {
+    return float(other) < response;
+  }
 
-  template<typename T>
-  friend bool operator >(T const &other, Response const &response);
+  return other < utils::convert<T>(response.data());
+}
 
-  template<typename T>
-  friend bool operator >=(Response const &response, T const &other);
+// operator !=
+template<typename T>
+inline_
+friend bool operator !=(Response const &response, T const &other) {
+  return !(response == other);
+}
 
-  template<typename T>
-  friend bool operator >=(T const &other, Response const &response);
+template<typename T>
+inline_
+friend bool operator !=(T const &other, Response const &response) {
+  return !(other == response);
+}
+
+// opeartor >
+template<typename T>
+inline_
+friend bool operator >(Response const &response, T const &other) {
+  return !(response < other || response == other);
+}
+
+template<typename T>
+inline_
+friend bool operator >(T const &other, Response const &response) {
+  return !(other < response || other == response);
+}
+
+// operator <=
+template<typename T>
+inline_
+friend bool operator <=(Response const &response, T const &other) {
+  return !(response > other);
+}
+
+template<typename T>
+inline_
+friend bool operator <=(T const &other, Response const &response) {
+  return !(other > response);
+}
+
+// operator >=
+template<typename T>
+inline_
+friend bool operator >=(Response const &response, T const &other) {
+  return !(response < other);
+}
+
+template<typename T>
+inline_
+friend bool operator >=(T const &other, Response const &response) {
+  return !(other < response);
+}
+// Response comparison operators }}}
  // public }}}
 
  // private {{{
@@ -357,101 +395,7 @@ class Response {
   }
  // private }}}
 };
-
-// Response comparison operators {{{
-// operator ==
-template<typename T>
-inline_
-bool operator ==(Response const &response, T const &other) {
-  return utils::convert<T>(response.data()) == other;
-}
-
-template<typename T>
-inline_
-bool operator ==(T const &other, Response const &response) {
-  return utils::convert<T>(response.data()) == other;
-}
-
-// operator <
-template<typename T>
-inline_
-bool operator <(Response const &response, T const &other) {
-  return utils::convert<T>(response.data()) < other;
-}
-
-template<typename T>
-inline_
-bool operator <(T const &other, Response const &response) {
-  return other < utils::convert<T>(response.data());
-}
-
-// operator !=
-template<typename T>
-inline_
-bool operator !=(Response const &response, T const &other) {
-  return !(response == other);
-}
-
-template<typename T>
-inline_
-bool operator !=(T const &other, Response const &response) {
-  return !(other == response);
-}
-
-// opeartor >
-template<typename T>
-inline_
-bool operator >(Response const &response, T const &other) {
-  return !(response < other || response == other);
-}
-
-template<typename T>
-inline_
-bool operator >(T const &other, Response const &response) {
-  return !(other < response || other == response);
-}
-
-// operator <=
-template<typename T>
-inline_
-bool operator <=(Response const &response, T const &other) {
-  return !(response > other);
-}
-
-template<typename T>
-inline_
-bool operator <=(T const &other, Response const &response) {
-  return !(other > response);
-}
-
-// operator >=
-template<typename T>
-inline_
-bool operator >=(Response const &response, T const &other) {
-  return !(response < other);
-}
-
-template<typename T>
-inline_
-bool operator >=(T const &other, Response const &response) {
-  return !(other < response);
-}
-// Response comparison operators }}}
-
-/*
-class ArrayReplyResponse : public Response {
- public:
-  ArrayReplyResponse(bool success = true)
-      : Response("", success)
-  {}
-
-  inline_
-  constexpr bool is_array_reply() const noexcept {
-    return true;
-  }
-};
-*/
-// Response classes }}}
+// Response }}}
 
 inline_
 std::ostream& operator<<(std::ostream &os, Response const &response) {
@@ -578,22 +522,22 @@ class Connection { // {{{
   }
 
 
-  // load_lua_script methods {{{
+  // load_script methods {{{
   //
-  // Loads a Lua script at either a filepath or from a string into Redis with a chosen alias.
+  // Loads a script at either a filepath or from a string into Redis with a chosen alias.
   // This script must expect its first "keycount" number of arguments to be names of Redis keys.
   //
   // For example, if foo.lua expects one key name as its first argument, then:
   //
-  //   this->load_lua_script("/path/to/foo.lua", "foo", 1);
+  //   this->load_lua_script("foo", "/path/to/foo.lua", 1);
   //
   // enables the following (assuming "bar" is some key name):
   //
   //   this->cmd("foo", "bar", 4, 1.23);
   //
-  bool load_lua_script_from_string(
-      std::string const &script_contents,
+  bool load_script_from_string(
       std::string const &alias,
+      std::string const &script_contents,
       size_t const keycount = 0,
       bool flush_old_scripts = false
   ) {
@@ -638,26 +582,26 @@ class Connection { // {{{
   }
 
   inline_
-  bool load_lua_script_from_file(
-      std::string const &filepath,
+  bool load_script_from_file(
       std::string const &alias,
+      std::string const &filepath,
       size_t const keycount = 0,
       bool flush_old_scripts = false
   ) {
-    return this->load_lua_script_from_string(utils::read_file(filepath), alias, keycount, flush_old_scripts);
+    return this->load_script_from_string(alias, utils::read_file(filepath), keycount, flush_old_scripts);
   }
 
   // shorter alias for the filepath version:
   inline_
-  bool load_lua_script(
-    std::string const &filepath,
+  bool load_script(
     std::string const &alias,
+    std::string const &filepath,
     size_t const keycount = 0,
     bool flush_old_scripts = false
   ) {
-    return this->load_lua_script_from_file(filepath, alias, keycount, flush_old_scripts);
+    return this->load_script_from_file(alias, filepath, keycount, flush_old_scripts);
   }
-  // load_lua_script methods }}}
+  // load_script methods }}}
 
 
   // cmd() {{{
@@ -841,8 +785,8 @@ class Connection { // {{{
     else {
       switch(reply->type) {
       case REDIS_REPLY_ERROR:
+        std::cerr << reply->str << std::endl;
         response.fail();
-        break;
       case REDIS_REPLY_STATUS:
       case REDIS_REPLY_STRING:
         response.set(reply->str);
@@ -863,8 +807,6 @@ class Connection { // {{{
         for (size_t i = 0; i < reply->elements; ++i) {
           Response tmp;
           if (!(tmp = this->parse_reply<flags>(reply->element[i], true))) {
-            std::cerr << "ERROR RESPONSE: " << tmp << std::endl;
-
             while (i-- > 0) {
               this->responses_.pop_back();
             }
