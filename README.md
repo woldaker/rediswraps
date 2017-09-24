@@ -1,4 +1,6 @@
-<img src="logo.png" alt="RedisWraps logo" style="float: left; margin-right: 2em;"><br/>
+<img src="logo.png" alt="RedisWraps logo" style="float: left; margin-right: 2em;">
+
+<br/>
 
 # RedisWraps
 
@@ -9,8 +11,8 @@
 
 ## Prerequisites
 - Compiler with C++11 support
-- [hiredis][hiredis_link]
-+ [Boost][boost_link] (specifically [boost::lexical cast][lexical_cast_link])
+- [hiredis](https://github.com/redis/hiredis)
++ [Boost](http://www.boost.org/) (specifically [boost::lexical cast](http://www.boost.org/doc/libs/release/libs/lexical_cast/))
 
 ## How to use it
 
@@ -127,12 +129,7 @@ When linking a binary that uses it:
 
 #### This project is very young and has quite a few features that are still missing:
 
-
-### Contributing
-
-
-## Versioning
-
+...
 
 ## Authors
 
@@ -140,11 +137,5 @@ When linking a binary that uses it:
 
 ## License
 
-This project is licensed under the ?
-
-<links>
-[hiredis_link]:      https://github.com/redis/hiredis                         "hiredis"
-[boost_link]:        http://www.boost.org/                                    "Boost C++ libraries"
-[optional_link]:     http://www.boost.org/doc/libs/release/libs/optional/     "boost::optional"
-[lexical_cast_link]: http://www.boost.org/doc/libs/release/libs/lexical_cast/ "boost::lexical_cast"
+This project is licensed under ???
 
