@@ -1,7 +1,9 @@
-<img src="logo.png" alt="RedisWraps logo" style="float: left; margin-right: 2em;">
-<br/>
+<img src="logo.png" alt="RedisWraps logo" style="float: left; margin-right: 2em;"><br/>
+
 # RedisWraps
+
 <br/>
+
 ### A simple and intuitive single-header C++ interface for Redis.
  
 
