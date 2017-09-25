@@ -109,7 +109,7 @@ while (redis->has_response()) {
 }
 ```
 
-or if you wish to top a response (and not pop it), pass false as the second parameter of **response( )**:
+or if you wish to top a response (and not pop it), pass false as an argument:
 
 ```C++
 auto next_response_peek = redis->response(false);
