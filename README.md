@@ -157,6 +157,7 @@ When linking a binary that uses it:
 - Pubsub support. (In dev)
 - Cluster & slave support.
 - Hardcoded command methods e.g. redis->rpush(...) (Is this really a good idea?... not sure)
+- Untested on Windows (I don't have a Windows machine), but doesn't use any Unix-specific headers...
 
 ## Authors
 
