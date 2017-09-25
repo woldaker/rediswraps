@@ -17,9 +17,8 @@ int main(int const argc, char const *argv[]) {
       "  Either backup and flush this db or spawn a new instance."
     );
 
-
     // Add new command 'pointless' from Lua script, which delegates to the 'ECHO' command to tell you how pointless it is.
-    redis->load_lua_script("test/lua/pointless.lua", "pointless");
+    redis->load_script("pointless", "test/lua/pointless.lua");
     redis->cmd("pointless");
 
     while (redis->has_response()) {
@@ -37,9 +36,11 @@ int main(int const argc, char const *argv[]) {
     BOOST_VERIFY(redis->num_responses() == 3);
 
     one = redis->response();
+    std::cout << "one = " << one << std::endl;
     BOOST_VERIFY(redis->num_responses() == 2);
 
     two = redis->response();
+    std::cout << "two = " << two << std::endl;
     BOOST_VERIFY(redis->num_responses() == 1);
 
     three_point_four = redis->response();
@@ -48,10 +49,7 @@ int main(int const argc, char const *argv[]) {
     BOOST_ASSERT(one == 1);
     BOOST_ASSERT(two == 2);
     // Allow for inaccuracies when converting string to floating point:
-    BOOST_ASSERT_MSG(
-      three_point_four >= (3.4f - 0.01f) && three_point_four <= (3.4f + 0.01f),
-      "three_point_four == 3.4    (+/- 0.01)"
-    );
+    BOOST_ASSERT(three_point_four == 3.4);
 
     redis->cmd("del", "foo");
 

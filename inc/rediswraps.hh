@@ -242,21 +242,10 @@ class Response {
 
   friend std::ostream& operator<<(std::ostream &os, Response const &response);
 
-  // bool() -- two variants {{{
-  // For L-vals
   inline_
-  //TODO TRY explicit
-  explicit operator bool() const& noexcept {
-    return this->success();
-  }
-
-  // For R-vals
-  inline_
-  //TODO TRY explicit
-  explicit operator bool() && noexcept {
+  operator bool() noexcept {
     return this->success() && utils::convert<bool>(this->data());
   }
-  // bool() - two variants }}}
 
   inline_
   operator void() const noexcept {}
