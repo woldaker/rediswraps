@@ -99,7 +99,7 @@ while (auto listval = redis->response()) {
 // 3.4
 ```
 
-as an alternative, you may use the **has_response()** method:
+as an alternative, you may use the **has\_response()** method:
 
 ```C++
 redis->cmd("lrange", "mylist", 0, -1);
@@ -107,6 +107,12 @@ redis->cmd("lrange", "mylist", 0, -1);
 while (redis->has_response()) {
 	std::cout << redis->response() << std::endl;
 }
+```
+
+or if you wish to top a response (and not pop it), pass false as the second parameter of **response( )**:
+
+```C++
+auto next_response_peek = redis->response(false);
 ```
 
 #### Load new commands from a Lua script:
