@@ -42,7 +42,7 @@ redis->cmd("mset", foo, 123, "bar", 4.56, "gaz", true);
 #### Get responses in a few different ways:
 
 ##### Capture at the callpoint - assigning to type
-You can just assign the result of *cmd( )* to any variable that makes sense to convert from string:
+You can just assign the result of **cmd( )** to any variable that makes sense to convert from string:
 
 ```C++
 int   fooval = redis->cmd("get", "foo");
