@@ -234,7 +234,7 @@ class Response {
         success_(success)
   {}
 
-  template<typename T>
+  template<typename T, typename = typename std::enable_if<!std::is_same<T, bool>::value>::type>
   inline_
   operator T() const noexcept {
     return utils::convert<T>(this->data());
@@ -242,21 +242,31 @@ class Response {
 
   friend std::ostream& operator<<(std::ostream &os, Response const &response);
 
+  inline
+  operator bool() const& noexcept {
+    return this->success();
+  }
+
   inline_
-  operator bool() noexcept {
+  explicit operator bool() && noexcept {
     return this->success() && utils::convert<bool>(this->data());
   }
 
   inline_
+  bool boolean() const noexcept {
+    return utils::convert<bool>(this->data());
+  }
+
+  inline
   operator void() const noexcept {}
 
-
-  inline_
+  inline
   std::string const data() const noexcept {
     return this->data_;
   }
+
   
-  inline_
+  inline
   bool success() const noexcept {
     return this->success_;
   }

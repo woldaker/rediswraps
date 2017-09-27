@@ -1,6 +1,8 @@
-<img src="logo.png" alt="RedisWraps logo" style="float: left; margin-right: 2em;"/><br/>
+<img align="left" src="logo.png" />
+
 # RedisWraps
 ### A simple and intuitive single-header C++ interface for Redis.
+<br/>
 
 ## Prerequisites
 - Compiler with C++11 support
@@ -8,7 +10,6 @@
 - [Boost](http://www.boost.org/) (specifically [boost::lexical_cast](http://www.boost.org/doc/libs/release/libs/lexical_cast/))
 
 ## How to use it
-
 #### Include header and create a connection
 
 ```C++
@@ -36,35 +37,45 @@ struct Foo {
 };
 Foo foo;
 
-redis->cmd("mset", foo, 123, "bar", 4.56, "gaz", true);
+redis->cmd("mset", foo, 123, "bar", 4.56, "gaz", false);
 ```
 
 #### Get responses in a few different ways:
-
-##### Capture at the callpoint - assigning to type
-You can just assign the result of **cmd( )** to any variable that makes sense to convert from string:
+##### Assign to variable
 
 ```C++
+// key "gaz" is set to false...
 int   fooval = redis->cmd("get", "foo");
 float barval = redis->cmd("get", "bar");
 bool  gazval = redis->cmd("get", "gaz");
 
-fooval == 123;  // true
-barval == 4.56; // true
-gazval == true; // true
+fooval == 123;   // true
+barval == 4.56;  // true
+gazval == false; // false!!  See note below
 ```
 
-##### Capture at the callpoint - inline
+**IMPORTANT NOTE:** Assigning to boolean will not produce the boolean value of the Redis data but whether or not the command was executed correctly.  To do this you may either use the inline/R-val form of cmd( ) (see below) or use an **auto** variable and the **boolean( )** method:
 
 ```C++
-redis->cmd("get", "foo") == 123;  // true
-redis->cmd("get", "bar") == 4.56; // true
-redis->cmd("get", "gaz") == true; // true
+// key "gaz" is set to false...
+auto gazval = redis->cmd("get", "gaz");
+
+if (gazval) {
+  // no error
+  std::cout << std::boolalpha << gazval.boolean() << std::endl;
+  // prints "false"
+}
 ```
 
-When using as a boolean, be careful of one caveat.
-<br/>
-If you wish to distinguish between an error and a valid false value, capture the value using **auto**, then call **success( )** on the result:
+##### Inline/R-val
+
+```C++
+redis->cmd("get", "foo") == 123;   // true
+redis->cmd("get", "bar") == 4.56;  // true
+redis->cmd("get", "gaz") == false; // true
+```
+
+**IMPORTANT NOTE:** Converting cmd( ) to boolean as an R-val will produce the boolean value of the Redis data ANDed with whether or not the transaction was successful. but whether or not the command was executed correctly.  To solely check the command success, assign to an **auto** variable and use the **success( )** function:
 
 ```C++
 redis->cmd("set", "gaz", false);
@@ -155,9 +166,10 @@ When linking a binary that uses it:
 
 - Async calls and responses. (In dev)
 - Pubsub support. (In dev)
+- Much more testing needs to be written. (In dev)
 - Cluster & slave support.
-- Hardcoded command methods e.g. redis->rpush(...) (Is this really a good idea?... not sure)
 - Untested on Windows (I don't have a Windows machine), but doesn't use any Unix-specific headers...
+- Hardcoded command methods e.g. redis->rpush(...) (Is this really a good idea?... not sure)
 
 ## Authors
 
