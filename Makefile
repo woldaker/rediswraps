@@ -45,7 +45,7 @@ LDFLAGS_LIBS     := hiredis $(if $(subst 0,,$(BENCHMARK)),boost_timer)
 
 override CXX      ?= g++
 # Add compiler -D flags depending on config variables
-override CPPFLAGS ?= $(addprefix -D,$(if $(DEBUG),REDISWRAPS_DEBUG inline_= $(if $(BENCHMARK),REDISWRAPS_BENCHMARK)))
+override CPPFLAGS ?= $(addprefix -D,$(if $(DEBUG),REDISWRAPS_DEBUG $(if $(BENCHMARK),REDISWRAPS_BENCHMARK)))
 override CFLAGS   ?= -Wall -Wextra -Wfatal-errors -pedantic -pipe -march=native
 # Necessary due to the hiredis library spitting out ugly warnings in combination with
 #   the strict error checking flags I use

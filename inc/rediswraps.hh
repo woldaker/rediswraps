@@ -22,11 +22,6 @@ extern "C" {
 #include <hiredis/hiredis.h>
 }
 
-#ifndef inline_
-#define inline_ inline
-#endif
-
-
 namespace rediswraps {
 
 namespace cmd { // {{{
@@ -156,13 +151,11 @@ constexpr int         PORT = 6379;
 namespace utils {
 
 template<typename Token, typename = typename std::enable_if<std::is_constructible<std::string, Token>::value>::type, typename Dummy = void>
-inline_
 std::string to_string(Token const &item) {
   return item;
 }
 
 template<typename Token, typename = typename std::enable_if<!std::is_constructible<std::string, Token>::value>::type>
-inline_
 std::string to_string(Token const &item) {
   std::string converted;
 
@@ -175,7 +168,6 @@ std::string to_string(Token const &item) {
 
 
 template<typename TargetType, typename = typename std::enable_if<std::is_default_constructible<TargetType>::value && !std::is_void<TargetType>::value>::type>
-inline_
 TargetType convert(std::string const &target) {
   TargetType new_target;
 
@@ -187,21 +179,33 @@ TargetType convert(std::string const &target) {
 }
 
 template<>
-inline_
 bool convert<bool>(std::string const &target) {
-  return !target.empty() && (target != CONSTANTS::NIL) && (
+  return !target.empty() &&
     (target == CONSTANTS::OK) ||
-    // In order to make strings literally containing "true" return true, uncomment the following:
-    // (target == "true") ||
-    (std::strtol(target.c_str(), nullptr, 10) != 0)
-    // Case-insensitive version.  e.g. also convert "TrUe" to true:
-    // || (target.length() == 4 &&
-    //  (target[0] == 'T' || target[0] == 't') &&
-    //  (target[1] == 'R' || target[1] == 'r') &&
-    //  (target[2] == 'U' || target[2] == 'u') &&
-    //  (target[3] == 'E' || target[3] == 'e')
-    //)
-  );
+    (target != CONSTANTS::NIL) &&
+#ifdef REDISWRAPS_BOOL_STRINGS_NOCASE
+    (
+      (target.length() == 4) &&
+      (target[0] == 'T' || target[0] == 't') &&
+      (target[1] == 'R' || target[1] == 'r') &&
+      (target[2] == 'U' || target[2] == 'u') &&
+      (target[3] == 'E' || target[3] == 'e')
+    ) ||
+   !(
+      (target.length() == 5) &&
+      (target[0] == 'F' || target[0] == 'f') &&
+      (target[1] == 'A' || target[1] == 'a') &&
+      (target[2] == 'L' || target[2] == 'l') &&
+      (target[3] == 'S' || target[3] == 's') &&
+      (target[4] == 'E' || target[4] == 'e')
+    ) &&
+#else
+#ifdef REDISWRAPS_BOOL_STRINGS
+    (target == "true") ||
+    (target != "false") &&
+#endif
+#endif
+    (std::strtol(target.c_str(), nullptr, 10) != 0);
 }
 
 
@@ -212,66 +216,55 @@ std::string const read_file(std::string const &filepath) {
   buffer << input.rdbuf();
   return buffer.str();
 }
-
 } // rediswraps::utils }}}
 
 
 // Response classes {{{
 //   Simple wrapper around std::string that adds an error check bool
 class Response {
-  //TODO why do I need to make Connection a friend?
+  // Needs to be friends with class connection so that the private method set()
+  //   can be called in Connection code
   friend class Connection;
 
  // public {{{
  public:
-  inline_
   Response() : success_(true) {}
 
   template<typename T>
-  inline_
   Response(T data, bool success = true)
       : data_(utils::to_string(data)),
         success_(success)
   {}
 
   template<typename T, typename = typename std::enable_if<!std::is_same<T, bool>::value>::type>
-  inline_
   operator T() const noexcept {
     return utils::convert<T>(this->data());
   }
 
   friend std::ostream& operator<<(std::ostream &os, Response const &response);
 
-  inline
   operator bool() const& noexcept {
     return this->success();
   }
 
-  inline_
   explicit operator bool() && noexcept {
     return this->success() && utils::convert<bool>(this->data());
   }
 
-  inline_
   bool boolean() const noexcept {
     return utils::convert<bool>(this->data());
   }
 
-  inline
   operator void() const noexcept {}
 
-  inline
   std::string const data() const noexcept {
     return this->data_;
   }
 
-  
-  inline
   bool success() const noexcept {
     return this->success_;
   }
 
-  inline_
   bool operator ==(Response const &other) const noexcept {
     return (this == &other) ||
     (
@@ -280,101 +273,89 @@ class Response {
     );
   }
   
-// Response comparison operators {{{
-// operator ==
-template<typename T>
-inline_
-friend bool operator ==(Response const &response, T const &other) {
-  if (std::is_same<T, double>::value) {
-    return response == float(other);
+  // Response comparison operators {{{
+  // operator ==
+  template<typename T>
+  friend bool operator ==(Response const &response, T const &other) {
+    if (std::is_same<T, double>::value) {
+      return response == float(other);
+    }
+
+    return utils::convert<T>(response.data()) == other;
   }
 
-  return utils::convert<T>(response.data()) == other;
-}
+  template<typename T>
+  friend bool operator ==(T const &other, Response const &response) {
+    if (std::is_same<T, double>::value) {
+      return response == float(other);
+    }
 
-template<typename T>
-inline_
-friend bool operator ==(T const &other, Response const &response) {
-  if (std::is_same<T, double>::value) {
-    return response == float(other);
+    return utils::convert<T>(response.data()) == other;
   }
 
-  return utils::convert<T>(response.data()) == other;
-}
+  // operator <
+  template<typename T>
+  friend bool operator <(Response const &response, T const &other) {
+    if (std::is_same<T, double>::value) {
+      return response < float(other);
+    }
 
-// operator <
-template<typename T>
-inline_
-friend bool operator <(Response const &response, T const &other) {
-  if (std::is_same<T, double>::value) {
-    return response < float(other);
+    return utils::convert<T>(response.data()) < other;
   }
 
-  return utils::convert<T>(response.data()) < other;
-}
+  template<typename T>
+  friend bool operator <(T const &other, Response const &response) {
+    if (std::is_same<T, double>::value) {
+      return float(other) < response;
+    }
 
-template<typename T>
-inline_
-friend bool operator <(T const &other, Response const &response) {
-  if (std::is_same<T, double>::value) {
-    return float(other) < response;
+    return other < utils::convert<T>(response.data());
   }
 
-  return other < utils::convert<T>(response.data());
-}
+  // operator !=
+  template<typename T>
+  friend bool operator !=(Response const &response, T const &other) {
+    return !(response == other);
+  }
 
-// operator !=
-template<typename T>
-inline_
-friend bool operator !=(Response const &response, T const &other) {
-  return !(response == other);
-}
+  template<typename T>
+  friend bool operator !=(T const &other, Response const &response) {
+    return !(other == response);
+  }
 
-template<typename T>
-inline_
-friend bool operator !=(T const &other, Response const &response) {
-  return !(other == response);
-}
+  // operator >
+  template<typename T>
+  friend bool operator >(Response const &response, T const &other) {
+    return !(response < other || response == other);
+  }
 
-// opeartor >
-template<typename T>
-inline_
-friend bool operator >(Response const &response, T const &other) {
-  return !(response < other || response == other);
-}
+  template<typename T>
+  friend bool operator >(T const &other, Response const &response) {
+    return !(other < response || other == response);
+  }
 
-template<typename T>
-inline_
-friend bool operator >(T const &other, Response const &response) {
-  return !(other < response || other == response);
-}
+  // operator <=
+  template<typename T>
+  friend bool operator <=(Response const &response, T const &other) {
+    return !(response > other);
+  }
 
-// operator <=
-template<typename T>
-inline_
-friend bool operator <=(Response const &response, T const &other) {
-  return !(response > other);
-}
+  template<typename T>
+  friend bool operator <=(T const &other, Response const &response) {
+    return !(other > response);
+  }
 
-template<typename T>
-inline_
-friend bool operator <=(T const &other, Response const &response) {
-  return !(other > response);
-}
+  // operator >=
+  template<typename T>
+  friend bool operator >=(Response const &response, T const &other) {
+    return !(response < other);
+  }
 
-// operator >=
-template<typename T>
-inline_
-friend bool operator >=(Response const &response, T const &other) {
-  return !(response < other);
-}
-
-template<typename T>
-inline_
-friend bool operator >=(T const &other, Response const &response) {
-  return !(other < response);
-}
-// Response comparison operators }}}
+  template<typename T>
+  friend bool operator >=(T const &other, Response const &response) {
+    return !(other < response);
+  }
+  // Response comparison operators }}}
  // public }}}
 
  // private {{{
@@ -383,12 +364,10 @@ friend bool operator >=(T const &other, Response const &response) {
   bool success_;
 
   template<typename T>
-  inline_
   void set(T new_data) noexcept {
     this->data_ = utils::to_string(new_data);
   }
 
-  inline_
   void fail() noexcept {
     this->success_ = false;
   }
@@ -396,7 +375,7 @@ friend bool operator >=(T const &other, Response const &response) {
 };
 // Response }}}
 
-inline_
+
 std::ostream& operator<<(std::ostream &os, Response const &response) {
   return os << response.data();
 }
@@ -457,7 +436,6 @@ class Connection { // {{{
   
   friend std::ostream& operator<< (std::ostream &os, Connection const &conn);
 
-
   // description() {{{
   std::string description() const {
     std::string desc("Redis Connection {");
@@ -480,46 +458,37 @@ class Connection { // {{{
   }
   // description() }}}
 
-  inline_
   void flush() {
     this->responses_ = {};
   }
 
-  inline_
   bool has_response() const noexcept {
     return !this->responses_.empty();
   }
 
-  inline_
   size_t const num_responses() const noexcept {
     return this->responses_.size();
   }
 
-  inline_
   bool is_connected() const noexcept {
     return !(this->context_ == nullptr || this->context_->err);
   }
 
-  inline_
   std::string name() const noexcept {
     return this->name_ ? *this->name_ : CONSTANTS::UNKNOWN_STR;
   }
 
-  inline_
   std::string socket() const noexcept {
     return this->socket_ ? *this->socket_ : CONSTANTS::UNKNOWN_STR;
   }
 
-  inline_
   std::string host() const noexcept {
     return this->host_ ? *this->host_ : CONSTANTS::UNKNOWN_STR;
   }
 
-  inline_
   int port() const noexcept {
     return this->port_ && (*this->port_ > 0) ? *this->port_ : CONSTANTS::UNKNOWN_INT;
   }
-
 
   // load_script methods {{{
   //
@@ -580,7 +549,7 @@ class Connection { // {{{
     return true;
   }
 
-  inline_
+  
   bool load_script_from_file(
       std::string const &alias,
       std::string const &filepath,
@@ -591,7 +560,6 @@ class Connection { // {{{
   }
 
   // shorter alias for the filepath version:
-  inline_
   bool load_script(
     std::string const &alias,
     std::string const &filepath,
@@ -601,7 +569,6 @@ class Connection { // {{{
     return this->load_script_from_file(alias, filepath, keycount, flush_old_scripts);
   }
   // load_script methods }}}
-
 
   // cmd() {{{
   //   Sends Redis a command.
@@ -627,7 +594,6 @@ class Connection { // {{{
   //   Both PERSIST and FLUSH are set
   //
   template<cmd::Flag flags = cmd::Flag::DEFAULT, typename RetType = Response, typename... Args>
-  inline_
   RetType cmd(std::string const &base, Args&&... args) noexcept {
     static_assert(cmd::flag::IsLegal<flags>::value,
       "Illegal combination of cmd::Flag values."
@@ -649,7 +615,6 @@ class Connection { // {{{
     return static_cast<RetType>(response);
   }
   // cmd() }}}
-
 
   // response() {{{
   Response response(bool pop_response = true, bool from_front = false) const noexcept {
@@ -679,7 +644,6 @@ class Connection { // {{{
 
 
   template<typename RetType, typename = typename std::enable_if<!std::is_same<RetType, Response>::value>::type>
-  inline
   RetType response(bool pop_response = true, bool from_front = false) const noexcept {
     return static_cast<RetType>(this->response(pop_response, from_front));
   }
@@ -690,7 +654,6 @@ class Connection { // {{{
   // Does not pop that response from the front by default.
   // Useful for debugging.
   //
-  inline_
   Response const last_response(bool pop_response = false) const {
     return this->response(pop_response, true);
   }
@@ -700,12 +663,10 @@ class Connection { // {{{
 
 // private {{{
  private:
-  inline_
   bool using_socket() const noexcept {
     return !!this->socket_;
   }
 
-  inline_
   bool using_host_and_port() const noexcept {
     return (!!this->host_) && (!!this->port_);
   }
@@ -738,7 +699,6 @@ class Connection { // {{{
     }
   }
 
-  inline_
   void disconnect() noexcept {
     if (this->is_connected()) {
       redisFree(this->context_);
@@ -747,7 +707,6 @@ class Connection { // {{{
     this->context_ = nullptr;
   }
 
-  inline_
   void reconnect() {
     this->disconnect();
     this->connect();
@@ -833,7 +792,6 @@ class Connection { // {{{
 
   // format_cmd_args() {{{
   template<int argc>
-  inline_
   void format_cmd_args(
     std::array<char*, argc> &&arg_strings,
     int const args_index
@@ -930,7 +888,7 @@ class Connection { // {{{
 // class Connection }}}
 
 
-inline_ std::ostream& operator<< (std::ostream &os, Connection const &conn) {
+std::ostream& operator<< (std::ostream &os, Connection const &conn) {
   return os << conn.description();
 }
 

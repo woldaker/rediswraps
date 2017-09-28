@@ -7,7 +7,7 @@
 ## Prerequisites
 - Compiler with C++11 support
 - [hiredis](https://github.com/redis/hiredis)
-- [Boost](http://www.boost.org/) (specifically [boost::lexical_cast](http://www.boost.org/doc/libs/release/libs/lexical_cast/))
+- [Boost](http://www.boost.org/) (specifically [boost::lexical\_cast](http://www.boost.org/doc/libs/release/libs/lexical_cast/) and [boost::optional](http://www.boost.org/doc/libs/release/lib/optional/)]
 
 ## How to use it
 #### Include header and create a connection
