@@ -45,51 +45,50 @@ redis->cmd("mset", foo, 123, "bar", 4.56, "gaz", false);
 
 ```C++
 // key "gaz" is set to false...
-int   fooval = redis->cmd("get", "foo");
-float barval = redis->cmd("get", "bar");
-bool  gazval = redis->cmd("get", "gaz");
+int   foo = redis->cmd("get", "foo");
+float bar = redis->cmd("get", "bar");
+bool  gaz = redis->cmd("get", "gaz");
 
-fooval == 123;   // true
-barval == 4.56;  // true
-gazval == false; // false!!  See note below
+foo == 123;  // true
+bar == 4.56; // true
+gaz == true; // true!!  See note below
 ```
 
-**IMPORTANT NOTE:** Assigning to boolean will not produce the boolean value of the Redis data but whether or not the command was executed correctly.  To do this you may either use the inline/R-val form of cmd( ) (see below) or use an **auto** variable and the **boolean( )** method:
+**IMPORTANT NOTE ABOUT BOOLEANS:** Assigning to boolean will not produce the boolean value of the Redis data but whether or not the command was executed correctly.
+To get exactly the behavior you want, either use a combination of **auto** and the **boolean( )** or **success( )** methods...
 
 ```C++
-// key "gaz" is set to false...
+// key "gaz" is still set to false...
+
 auto gazval = redis->cmd("get", "gaz");
+auto errval = redis->cmd("gert", "gaz");
+  // prints to stderr: "ERR unknown command 'gert'"
 
-if (gazval) {
-  // no error
-  std::cout << std::boolalpha << gazval.boolean() << std::endl;
-  // prints "false"
+gazval;           // true
+gazval.boolean(); // false
+gazval.success(); // true
+errval;           // false
+errval.boolean(); // false
+errval.success(); // false
+```
+
+or, use **cmd( )** directly, inline as an r-val.
+When used this way, **cmd( )** will produce the same error result AND-ed with the actual Redis value:
+
+```C++
+// key "gaz" still set to false..
+
+if (redis->cmd("get", "gaz")) {} // false as expected
+if (redis->cmd("gert", "gaz")) {} // false, but not for the same reason...
+  // ERR unknown command 'gert'
+
+// A concise way to get around this is using an auto variable inline:
+if (auto gazval = redis->cmd("get", "gaz")) { // true
+  gazval.boolean(); // false
 }
-```
 
-##### Inline/R-val
-
-```C++
-redis->cmd("get", "foo") == 123;   // true
-redis->cmd("get", "bar") == 4.56;  // true
-redis->cmd("get", "gaz") == false; // true
-```
-
-**IMPORTANT NOTE:** Converting cmd( ) to boolean as an R-val will produce the boolean value of the Redis data ANDed with whether or not the transaction was successful. but whether or not the command was executed correctly.  To solely check the command success, assign to an **auto** variable and use the **success( )** function:
-
-```C++
-redis->cmd("set", "gaz", false);
-assert(!redis->cmd("get", "gaz"));  // true, but not sure why...
-assert(!redis->cmd("gert", "gaz")); // also true.  Prints "ERR unknown command 'gert'"
-
-auto gazbool_false = redis->cmd("get", "gaz");
-auto gazbool_error = redis->cmd("gert", "gaz");
-
-assert(gazbool_false.success()); // true
-assert(gazbool_error.success()); // false
-
-assert(gazbool_false); // false
-assert(gazbool_error); // false
+if (auto gazval = redis->cmd("gert", "gaz")) { ... } // false
+  // ERR unknown command 'gert'
 ```
 
 ##### Loop through multiple replies with response( )
@@ -127,18 +126,23 @@ auto next_response_peek = redis->response(false);
 ```
 
 #### Load new commands from a Lua script:
-```C++
-redis->cmd("mycmd", "mylist", "foobar");
-// prints "ERR unknown command 'mycmd'"
 
-redis->load_script("mycmd", "/path/to/script.lua",
+Use either **load\_script\_from\_file( )** or **load\_script( )** (the latter is an alias for the former):
+
+```C++
+redis->cmd("gert", "mylist", "foobar");
+// ERR unknown command 'gert'
+
+redis->load_script("gert", "/path/to/script.lua",
 	1   // number of KEYS[] Lua will expect; default = 0.
 );
 
-redis->cmd("mycmd", "mylist", "foobar");   // Now it will work
+redis->cmd("gert", "mylist", "foobar");   // Now it will work
 ```
 
 #### or load a script inline:
+
+Use **load\_script\_from\_string( )**:
 
 ```C++
 redis->load_script_from_string("pointless", 
@@ -146,7 +150,7 @@ redis->load_script_from_string("pointless",
 );
 
 redis->cmd("pointless");
-// prints "This command is pointless!"
+// prints to stdout: "This command is pointless!"
 ```
 
 ## Build
