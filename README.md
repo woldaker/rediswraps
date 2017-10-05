@@ -7,7 +7,7 @@
 ## Prerequisites
 - Compiler with C++11 support
 - [hiredis](https://github.com/redis/hiredis)
-- [Boost](http://www.boost.org/) (specifically [boost::lexical\_cast](http://www.boost.org/doc/libs/release/libs/lexical_cast/) and [boost::optional](http://www.boost.org/doc/libs/release/lib/optional/)]
+- [Boost](http://www.boost.org/) (specifically [boost::lexical\_cast](http://www.boost.org/doc/libs/release/libs/lexical_cast/) and [boost::optional](http://www.boost.org/doc/libs/release/lib/optional/))
 
 ## How to use it
 #### Include header and create a connection
@@ -21,8 +21,9 @@ std::unique_ptr<Redis> redis;
 // Construct with ("IP", port) or ("path/to/socket")
 try {
 	redis.reset(new Redis("12.34.56.78", 6379));
-} catch (...) {
-	/* handle error */
+} catch (std::exception const &e) {
+	std::cerr << e.what() << std::endl;
+  /* handle error */
 }
 ```
 
@@ -125,7 +126,7 @@ or if you wish to top a response (and not pop it), pass false as an argument:
 auto next_response_peek = redis->response(false);
 ```
 
-#### Load new commands from a Lua script:
+#### Load new commands using Lua:
 
 Use either **load\_script\_from\_file( )** or **load\_script( )** (the latter is an alias for the former):
 
@@ -140,9 +141,7 @@ redis->load_script("gert", "/path/to/script.lua",
 redis->cmd("gert", "mylist", "foobar");   // Now it will work
 ```
 
-#### or load a script inline:
-
-Use **load\_script\_from\_string( )**:
+Or use **load\_script\_from\_string( )**:
 
 ```C++
 redis->load_script_from_string("pointless", 
@@ -152,6 +151,12 @@ redis->load_script_from_string("pointless",
 redis->cmd("pointless");
 // prints to stdout: "This command is pointless!"
 ```
+
+### WARNING about multithreaded applications:
+Any Lua script loaded from one connection object will not be visible from any other, including thread\_local ones.
+You will get an "ERR unknown command" from the object which didn't load the script itself, and I'm not sure what behavior would result if the 2nd connection attempted to reload it.
+In order to fix this I would need a static place to track loaded scripts, which in turn would require static initialization, which in 
+turn would prohibit this from being a header-only library.  (See [TODO](#TODO) section)
 
 ## Build
 
@@ -174,6 +179,7 @@ When linking a binary that uses it:
 - Cluster & slave support.
 - Untested on Windows (I don't have a Windows machine), but doesn't use any Unix-specific headers...
 - Hardcoded command methods e.g. redis->rpush(...) (Is this really a good idea?... not sure)
+- Include hiredis as a git submodule and statically link it into rediswraps.so?  Would eliminate the need for requiring users to have the hiredis library available for dynamic linking and would let me solve the problem of separate connection objects not being able to share loaded Lua scripts, as I could then split the single header into different compilation units.
 
 ## Authors
 
