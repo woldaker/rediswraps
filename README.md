@@ -178,10 +178,8 @@ When linking a binary that uses it:
 - Pubsub support.  The original code I wrote, repurposed here as RedisWraps, used a combination of [boost::lockfree::spsc\_queue](http://www.boost.org/doc/libs/release/doc/html/boost/lockfree/spsc_queue.html) and a simple "event" struct to shove into the queue for this purpose.  Inherently requires multithreading and, if I remember the implementation correctly, the async TODO as prerequisites.
 - Cluster & slave support.  I actually know very little about this topic in general.
 - Untested on Windows.  However it doesn't use any Unix-specific headers that I'm aware of.
-- Include hiredis as a git submodule and statically link it into a dynamic library.  (Does that even make sense?  I think so, but I've never done that before.  Also, statically linking hiredis into a separate library would effectively mean that librediswraps.so would need to be built separately for each architectures it's intended to run on.)  Would eliminate the need for requiring users to have the hiredis library available for dynamic linking and would let me solve the problem of separate connection objects not being able to share loaded Lua scripts, as I could then split the single header into different compilation units.
+- Include hiredis as a git submodule and statically link it into a dynamic library.  (Does that even make sense?  I think so, but I've never done that before.  Also, statically linking hiredis into a separate library means that librediswraps.so would need to be built separately for each architecture it's intended to run on.)  Would eliminate the need for requiring users to have the hiredis library available for dynamic linking and would let me solve the problem of separate connection objects not being able to share loaded Lua scripts, as I could then split the single header into different compilation units.
 - Not sure: Hardcoded command methods e.g. redis->rpush(...) (Is this really a good idea?)
-
-## Note to potential contributors
 
 ## Authors
 
