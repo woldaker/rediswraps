@@ -30,23 +30,22 @@ try {
 
 #### Issue commands with Cmd("name", args...)
 
-Args are automatically converted to std::string.
-May be of any fundamental type or any type with implicit conversion to std::string defined.
+Args may be a string (char\*, std::string), any fundamental type (from type\_traits), or any type which defines implicit conversion to std::string.
 
 ```C++
 struct Foo {
 	operator std::string() const { return "foo"; }
 };
-Foo foo;
+Foo myfoo;
 
-redis->Cmd("mset", foo, 123, "bar", 4.56, "gaz", false);
+redis->Cmd("mset", myfoo, 123, "bar", 4.56, "gaz", false);
 ```
 
 #### Get responses in a few different ways:
 ##### Assign to variable
 
 ```C++
-// key "gaz" is set to false...
+// redis still contains {foo=123, bar=4.56, gaz=false}
 int   foo = redis->Cmd("get", "foo");
 float bar = redis->Cmd("get", "bar");
 bool  gaz = redis->Cmd("get", "gaz");
@@ -57,7 +56,7 @@ gaz == true; // true!!  See note below
 ```
 
 **IMPORTANT NOTE ABOUT BOOLEANS:** Assigning to boolean will not produce the boolean value of the Redis data but whether or not the command was executed correctly.
-To get exactly the behavior you want, either use a combination of **auto** and the **boolean( )** or **success( )** methods...
+To get exactly the behavior you want, use a combination of **auto** and the **boolean( )** or **success( )** methods...
 
 ```C++
 // key "gaz" is still set to false...
@@ -66,12 +65,12 @@ auto gazval = redis->Cmd("get", "gaz");
 auto errval = redis->Cmd("gert", "gaz");
   // prints to stderr: "ERR unknown command 'gert'"
 
-gazval;           // true
-gazval.boolean(); // false
-gazval.success(); // true
-errval;           // false
-errval.boolean(); // false
-errval.success(); // false
+gazval;           // true  : "get gaz" is a valid command.
+gazval.success(); // true  : same reason.
+gazval.boolean(); // false : key "gaz" has a false value.
+errval;           // false : "gert gaz" is not a valid command.
+errval.success(); // false : same reason.
+errval.boolean(); // false : same reason.  Value of "gaz" never fetched.
 ```
 
 or, use **Cmd( )** directly, inline as an r-val.
@@ -80,17 +79,14 @@ When used this way, **Cmd( )** will produce the same error result AND-ed with th
 ```C++
 // key "gaz" still set to false..
 
-if (redis->Cmd("get", "gaz")) {} // false as expected
-if (redis->Cmd("gert", "gaz")) {} // false, but not for the same reason...
+if (redis->Cmd("get", "gaz")) {/*...*/}  // false as expected.
+if (redis->Cmd("gert", "gaz")) {/*...*/} // false due to invalid command error.
   // ERR unknown command 'gert'
 
 // A concise way to get around this is using an auto variable inline:
 if (auto gazval = redis->Cmd("get", "gaz")) { // true
   gazval.boolean(); // false
 }
-
-if (auto gazval = redis->Cmd("gert", "gaz")) { ... } // false
-  // ERR unknown command 'gert'
 ```
 
 ##### Loop through multiple replies with response( )
