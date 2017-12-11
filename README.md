@@ -1,13 +1,14 @@
 <img align="left" src="logo.png" />
 
 # RedisWraps
-### A simple and intuitive single-header C++ interface for Redis.
+### A C++ library containing a simple and intuitive interface for Redis.
 <br/>
 
 ## Prerequisites
 - Compiler with C++11 support
-- [hiredis](https://github.com/redis/hiredis)
-- [Boost](http://www.boost.org/) (specifically [boost::lexical\_cast](http://www.boost.org/doc/libs/release/libs/lexical_cast/) and [boost::optional](http://www.boost.org/doc/libs/release/lib/optional/))
+- [CMake](https://cmake.org/)
+- [hiredis](https://github.com/redis/hiredis) (installed automatically via CMake)
+- [Boost](http://www.boost.org/) (specifically [boost::lexical\_cast](http://www.boost.org/doc/libs/release/libs/lexical_cast/) and [boost::optional](http://www.boost.org/doc/libs/release/lib/optional/)) (installed automatically via CMake)
 
 ## How to use it
 #### Include header and create a connection
