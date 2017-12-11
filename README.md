@@ -128,14 +128,14 @@ auto next_response_peek = redis->Response(false);
 Use either **LoadScriptFromFile( )** or **LoadScript( )** (the latter is an alias for the former):
 
 ```C++
-redis->Cmd("gert", "mylist", "foobar");
+redis->Cmd("gert", "mylist", "foo");
 // ERR unknown command 'gert'
 
 redis->LoadScript("gert", "/path/to/script.lua",
 	1   // number of KEYS[] Lua will expect; default = 0.
 );
 
-redis->Cmd("gert", "mylist", "foobar");   // Now it will work
+redis->Cmd("gert", "mylist", "foo");   // Now it will work
 ```
 
 Or use **LoadScriptFromString( )**:
