@@ -89,7 +89,7 @@ if (auto gazval = redis->Cmd("get", "gaz")) { // true
 }
 ```
 
-##### Loop through multiple replies with response( )
+##### Loop through multiple replies with Response( )
 
 ```C++
 redis->Cmd("rpush", "mylist", 1, "2", "3.4");
