@@ -154,7 +154,7 @@ redis->Cmd("pointless");
 ##### The build should look something like this.  Additional changes required are in bold.
 When building an object that uses it:
 
-`g++`**`-std=c++11`**`-c your\_obj.cc -o your\_obj.o`
+`g++`**`-std=c++11`**`-c your_obj.cc -o your_obj.o`
 
 When linking a binary that uses it:
 
