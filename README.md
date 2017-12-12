@@ -107,7 +107,7 @@ while (auto listval = redis->Response()) {
 // 3.4
 ```
 
-as an alternative, you may use the **HasResponse()** method:
+as an alternative, you may use the **HasResponse( )** method:
 
 ```C++
 redis->Cmd("lrange", "mylist", 0, -1);
