@@ -70,9 +70,12 @@ gaz == true; // true!!  See note below
 
 ```diff
 - IMPORTANT NOTE ABOUT BOOLEAN RESPONSES
+-
+- Assigning to boolean will not produce the boolean value of the Redis data but
+-   whether or not the command executed correctly.
+- To get exactly the behavior you want, use a combination of auto and the
+-   resulting object's boolean( ) and/or success( ) methods, as shown below.
 ```
-Assigning to boolean will not produce the boolean value of the Redis data but *whether or not the command executed correctly*.
-To get exactly the behavior you want, use a combination of **auto** and the resulting object's **boolean( )** and/or **success( )** methods:
 
 ```C++
 auto gazval = redis->Cmd("get", "gaz");
