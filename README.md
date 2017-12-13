@@ -148,38 +148,38 @@ else {
 Flushes all previous responses from the response queue.
 Queues new response(s).
 This is the default behavior resulting from providing no template arguments.
-
+```
 Example prints:
 OK
 No further responses!
-
+```
 
 #### Cmd<CMD_SAVED>( )
 Saves all previous responses in the response queue.
 Queues new response(s).
-
+```
 Example prints:
 123
 OK
-
+```
 
 #### Cmd<CMD_VOID>( )
 Saves all previous responses in the response queue.
 Does not queue response(s) from queue.
-
+```
 Example prints:
 123
 No further responses!
-
+```
 
 #### Cmd<CMD_CLEAR>( )
 Flushes all previous responses from the response queue.
 Does not queue response(s) from queue.
-
+```
 Example prints:
 Redis has not previously queued any further responses.
 No further responses!
-
+```
 NOTE: The first message comes from connection.cc due to a false response.
 
 
