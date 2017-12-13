@@ -41,11 +41,24 @@ Foo myfoo;
 redis->Cmd("mset", myfoo, 123, "bar", 4.56, "gaz", false);
 ```
 
-#### Get responses in a few different ways:
-##### Assign to variable
-
+### Getting responses
+NOTE: The following examples assume that Redis still contains only {foo=123, bar=4.56, gaz=false}
+#### Option 1: Use **Cmd( )** as an R-value
+When used this way, **Cmd( )** will produce the same error result AND-ed with the actual Redis value:
 ```C++
-// redis still contains {foo=123, bar=4.56, gaz=false}
+if (redis->Cmd("get", "gaz")) {/*...*/}  // false as expected.
+if (redis->Cmd("gert", "gaz")) {/*...*/} // false due to invalid command error.
+  // prints to stderr: "ERR unknown command 'gert'"
+
+// A concise way to get around this is using an auto variable inline:
+if (auto gazval = redis->Cmd("get", "gaz")) { // true
+  gazval.boolean(); // false
+}
+```
+
+#### Option 2: Assign the output of **Cmd( )** to a variable
+When used this way, the value produced is the same as before with the exception of booleans.
+```C++
 int   foo = redis->Cmd("get", "foo");
 float bar = redis->Cmd("get", "bar");
 bool  gaz = redis->Cmd("get", "gaz");
@@ -55,12 +68,13 @@ bar == 4.56; // true
 gaz == true; // true!!  See note below
 ```
 
-**IMPORTANT NOTE ABOUT BOOLEANS:** Assigning to boolean will not produce the boolean value of the Redis data but whether or not the command was executed correctly.
-To get exactly the behavior you want, use a combination of **auto** and the **boolean( )** or **success( )** methods...
+```diff
+- IMPORTANT NOTE ABOUT BOOLEAN RESPONSES
+```
+Assigning to boolean will not produce the boolean value of the Redis data but __whether or not the command executed correctly__.
+To get exactly the behavior you want, use a combination of **auto** and the resulting object's **boolean( )** and/or **success( )** methods:
 
 ```C++
-// key "gaz" is still set to false...
-
 auto gazval = redis->Cmd("get", "gaz");
 auto errval = redis->Cmd("gert", "gaz");
   // prints to stderr: "ERR unknown command 'gert'"
@@ -73,29 +87,12 @@ errval.success(); // false : same reason.
 errval.boolean(); // false : same reason.  Value of "gaz" never fetched.
 ```
 
-or, use **Cmd( )** directly, inline as an r-val.
-When used this way, **Cmd( )** will produce the same error result AND-ed with the actual Redis value:
-
+#### Option 3: Loop through batch replies with **Response( )**
 ```C++
-// key "gaz" still set to false..
-
-if (redis->Cmd("get", "gaz")) {/*...*/}  // false as expected.
-if (redis->Cmd("gert", "gaz")) {/*...*/} // false due to invalid command error.
-  // ERR unknown command 'gert'
-
-// A concise way to get around this is using an auto variable inline:
-if (auto gazval = redis->Cmd("get", "gaz")) { // true
-  gazval.boolean(); // false
-}
-```
-
-##### Loop through multiple replies with Response( )
-
-```C++
-redis->Cmd("rpush", "mylist", 1, "2", "3.4");
+redis->Cmd("rpush", "mylist", 1, "2", 3.4);
 redis->Cmd("lrange", "mylist", 0, -1);
 
-// WARNING: Any calls to Cmd() here will destroy the results of the previous lrange call!
+// WARNING: Any calls to Cmd() here will destroy the results of the previous lrange call!  See below for a way around this.
 
 while (auto listval = redis->Response()) {
 	std::cout << listval << std::endl;
@@ -123,8 +120,69 @@ or if you wish to top a response (and not pop it), pass false as an argument:
 auto next_response_peek = redis->Response(false);
 ```
 
-#### Load new commands using Lua:
+### Changing the behavior of **Cmd( )**
+Cmd( ) may take template arguments which will modify the way it handles calls and responses.
+These arguments must be of type **rediswraps::cmd::Flag**.  To make code more readable,
+place 'using rediswraps::cmd;' at the top of your source.  The following examples
+assume the namespace rediswraps::cmd is available in the current scope.
 
+For all the following examples, replace ??? with the corresponding template argument.
+```C++
+// In Redis: foo=123
+redis->Cmd("get", "foo");
+auto fooval = redis->Cmd<???>("set", "foo", 456);
+
+std::cout << fooval << std::endl;
+
+if (auto next_response = redis->Response()) {
+  std::cout << next_response << std::endl;
+}
+else {
+  std::cout << "No further responses!" << std::endl;
+}
+```
+
+
+#### Cmd<cmd::DEFAULT>( )
+Flushes all previous responses from the response queue.
+Queues new response(s).
+This is the default behavior resulting from providing no template arguments.
+
+The example would print:
+OK
+No further responses!
+
+
+#### Cmd<cmd::SAVED>( )
+Saves all previous responses in the response queue.
+Queues new response(s).
+
+The example would print:
+123
+OK
+
+
+#### Cmd<cmd::VOID>( )
+Saves all previous responses in the response queue.
+Does not queue response(s) from queue.
+
+The example would print:
+123
+No further responses!
+
+
+#### Cmd<cmd::CLEAR>( )
+Flushes all previous responses from the response queue.
+Does not queue response(s) from queue.
+
+The example would print:
+Redis has not previously queued any further responses.
+No further responses!
+
+The first message is hard-coded in connection.cc due to the response being false.
+
+
+### Load new commands using Lua:
 Use either **LoadScriptFromFile( )** or **LoadScript( )** (the latter is an alias for the former):
 
 ```C++
@@ -149,9 +207,8 @@ redis->Cmd("pointless");
 // prints to stdout: "This command is pointless!"
 ```
 
-## Build
 
-##### The build should look something like this.  Additional changes required are in bold.
+## Build
 When building an object that uses it:
 
 `g++`**`-std=c++11`**`-c your_obj.cc -o your_obj.o`
@@ -160,9 +217,10 @@ When linking a binary that uses it:
 
 `g++`**`-std=c++11`**`your_program.cc -o YourProgram`**`-lrediswraps`**
 
-## TODO
 
-#### This project is very young and has quite a few features that are still missing.  Here are just a few off the top of my head:
+## TODO
+This project is very young and has quite a few features that are still missing.
+Here are just a few off the top of my head:
 
 - Much more testing needs to be written.
 - Async calls.  Original solution used [libev](http://software.schmorp.de/pkg/libev.html).
@@ -178,3 +236,4 @@ When linking a binary that uses it:
 ## License
 
 This project is licensed under the [BSD 3-clause license](LICENSE).
+

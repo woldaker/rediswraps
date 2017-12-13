@@ -46,15 +46,15 @@ enum class Flag : FlagEnum {
   //
   kDefault = (kFlush | kQueue),
 
-  // kStash = 0x6
+  // kSaved = 0x6
   // Keep old responses and also queue these ones.
   //
   // Useful for situations such as this:
   //   Cmd("lpush", "my_list", "foobat", "foobas", "foobar");
   //   Cmd("lrange", "my_list", 0, -1);
-  //   while (Cmd<kStash>("rpop", "my_list") != "foobar") {...}
+  //   while (Cmd<kSaved>("rpop", "my_list") != "foobar") {...}
   //
-  kStash = (kPersist | kQueue),
+  kSaved = (kPersist | kQueue),
 
   // kClear = 0x9
   // Flush old responses, also ignore this one.
@@ -97,6 +97,12 @@ enum class Flag : FlagEnum {
   kIllegalQueueOpts3 = (kIllegalQueueOpts | kPersist), // 0xE
   kIllegalOptsAll    = (kIllegalFlushOpts | kIllegalQueueOpts) // 0xF
 };
+
+// For readability:
+constexpr Flag DEFAULT = Flag::kDefault;
+constexpr Flag SAVED   = Flag::kSaved;
+constexpr Flag CLEAR   = Flag::kClear;
+constexpr Flag VOID    = Flag::kVoid;
 
 template<Flag T> struct FlagsAreLegal
   : std::integral_constant<bool, 
