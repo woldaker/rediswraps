@@ -92,7 +92,8 @@ errval.boolean(); // false : same reason.  Value of "gaz" never fetched.
 redis->Cmd("rpush", "mylist", 1, "2", 3.4);
 redis->Cmd("lrange", "mylist", 0, -1);
 
-// WARNING: Any calls to Cmd() here will destroy the results of the previous lrange call!  See below for a way around this.
+// WARNING: Any calls to Cmd() here will destroy the results of the previous lrange call!
+// See below for a way around this.
 
 while (auto listval = redis->Response()) {
 	std::cout << listval << std::endl;
