@@ -98,12 +98,6 @@ enum class Flag : FlagEnum {
   kIllegalOptsAll    = (kIllegalFlushOpts | kIllegalQueueOpts) // 0xF
 };
 
-// For readability:
-constexpr Flag DEFAULT = Flag::kDefault;
-constexpr Flag SAVED   = Flag::kSaved;
-constexpr Flag CLEAR   = Flag::kClear;
-constexpr Flag VOID    = Flag::kVoid;
-
 template<Flag T> struct FlagsAreLegal
   : std::integral_constant<bool, 
       static_cast<FlagEnum>(T) != (
@@ -130,6 +124,12 @@ template<Flag T> struct FlagsQueueResponses
 {};
 
 } // namespace cmd
+
+// For readability:
+constexpr cmd::Flag CMD_DEFAULT = cmd::Flag::kDefault;
+constexpr cmd::Flag CMD_SAVED   = cmd::Flag::kSaved;
+constexpr cmd::Flag CMD_CLEAR   = cmd::Flag::kClear;
+constexpr cmd::Flag CMD_VOID    = cmd::Flag::kVoid;
 } // namespace rediswraps
 
 #endif

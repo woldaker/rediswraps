@@ -123,15 +123,15 @@ auto next_response_peek = redis->Response(false);
 
 ### Changing the behavior of **Cmd( )**
 Cmd( ) may take template arguments which will modify the way it handles calls and responses.
-These arguments must be of type **rediswraps::cmd::Flag**.  To make code more readable,
-place 'using rediswraps::cmd;' at the top of your source.  The following examples
-assume the namespace rediswraps::cmd is available in the current scope.
+These arguments must be of type **rediswraps::cmd::Flag**.
+To make this easier on programmers, four constants were created within the rediswraps namespace
+which alias values of rediswraps::cmd::Flag, as illustrated below.
 
-EXAMPLE NOTE: For all of the following cases, replace cmd::??? with the corresponding template argument.
+EXAMPLE NOTE: For all of the following cases, replace ??? with the corresponding template argument.
 ```C++
 // In Redis: foo=123
 redis->Cmd("get", "foo");
-auto fooval = redis->Cmd<cmd::???>("set", "foo", 456);
+auto fooval = redis->Cmd<???>("set", "foo", 456);
 
 std::cout << fooval << std::endl;
 
@@ -144,7 +144,7 @@ else {
 ```
 
 
-#### Cmd<cmd::DEFAULT>( )
+#### Cmd<CMD_DEFAULT>( )
 Flushes all previous responses from the response queue.
 Queues new response(s).
 This is the default behavior resulting from providing no template arguments.
@@ -154,7 +154,7 @@ OK
 No further responses!
 
 
-#### Cmd<cmd::SAVED>( )
+#### Cmd<CMD_SAVED>( )
 Saves all previous responses in the response queue.
 Queues new response(s).
 
@@ -163,7 +163,7 @@ Example prints:
 OK
 
 
-#### Cmd<cmd::VOID>( )
+#### Cmd<CMD_VOID>( )
 Saves all previous responses in the response queue.
 Does not queue response(s) from queue.
 
@@ -172,7 +172,7 @@ Example prints:
 No further responses!
 
 
-#### Cmd<cmd::CLEAR>( )
+#### Cmd<CMD_CLEAR>( )
 Flushes all previous responses from the response queue.
 Does not queue response(s) from queue.
 
