@@ -71,7 +71,7 @@ gaz == true; // true!!  See note below
 ```diff
 - IMPORTANT NOTE ABOUT BOOLEAN RESPONSES
 ```
-Assigning to boolean will not produce the boolean value of the Redis data but __whether or not the command executed correctly__.
+Assigning to boolean will not produce the boolean value of the Redis data but *whether or not the command executed correctly*.
 To get exactly the behavior you want, use a combination of **auto** and the resulting object's **boolean( )** and/or **success( )** methods:
 
 ```C++
@@ -127,11 +127,11 @@ These arguments must be of type **rediswraps::cmd::Flag**.  To make code more re
 place 'using rediswraps::cmd;' at the top of your source.  The following examples
 assume the namespace rediswraps::cmd is available in the current scope.
 
-For all the following examples, replace ??? with the corresponding template argument.
+EXAMPLE NOTE: For all of the following cases, replace cmd::??? with the corresponding template argument.
 ```C++
 // In Redis: foo=123
 redis->Cmd("get", "foo");
-auto fooval = redis->Cmd<???>("set", "foo", 456);
+auto fooval = redis->Cmd<cmd::???>("set", "foo", 456);
 
 std::cout << fooval << std::endl;
 
@@ -149,7 +149,7 @@ Flushes all previous responses from the response queue.
 Queues new response(s).
 This is the default behavior resulting from providing no template arguments.
 
-The example would print:
+Example prints:
 OK
 No further responses!
 
@@ -158,7 +158,7 @@ No further responses!
 Saves all previous responses in the response queue.
 Queues new response(s).
 
-The example would print:
+Example prints:
 123
 OK
 
@@ -167,7 +167,7 @@ OK
 Saves all previous responses in the response queue.
 Does not queue response(s) from queue.
 
-The example would print:
+Example prints:
 123
 No further responses!
 
@@ -176,11 +176,11 @@ No further responses!
 Flushes all previous responses from the response queue.
 Does not queue response(s) from queue.
 
-The example would print:
+Example prints:
 Redis has not previously queued any further responses.
 No further responses!
 
-The first message is hard-coded in connection.cc due to the response being false.
+NOTE: The first message comes from connection.cc due to a false response.
 
 
 ### Load new commands using Lua:
@@ -205,17 +205,15 @@ redis->LoadScriptFromString("pointless",
 );
 
 redis->Cmd("pointless");
-// prints to stdout: "This command is pointless!"
+// prints "This command is pointless!"
 ```
 
 
 ## Build
 When building an object that uses it:
-
 `g++`**`-std=c++11`**`-c your_obj.cc -o your_obj.o`
 
 When linking a binary that uses it:
-
 `g++`**`-std=c++11`**`your_program.cc -o YourProgram`**`-lrediswraps`**
 
 
