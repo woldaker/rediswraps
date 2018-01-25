@@ -132,3 +132,15 @@ Mkfile.old
 dkms.conf
 
 backup/
+
+# Generated when cmake is run:
+build/
+
+# Sometimes I accidentally run cmake from the root directory... saves me having
+# to clean it up before commits:
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+
