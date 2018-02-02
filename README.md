@@ -5,10 +5,11 @@
 <br/>
 
 ## Prerequisites
+##### NOTE: CMake is configured to automatically attempt resolution of all dependencies listed below which are listed *after* CMake itself.
 - Compiler with C++11 support
 - [CMake](https://cmake.org/)
-- [hiredis](https://github.com/redis/hiredis) (installed automatically via CMake)
-- [Boost](http://www.boost.org/) (specifically [boost::lexical\_cast](http://www.boost.org/doc/libs/release/libs/lexical_cast/) and [boost::optional](http://www.boost.org/doc/libs/release/lib/optional/)) (installed automatically via CMake)
+- [hiredis](https://github.com/redis/hiredis)
+- [Boost](http://www.boost.org/) (specifically [boost::lexical\_cast](http://www.boost.org/doc/libs/release/libs/lexical_cast/) and [boost::optional](http://www.boost.org/doc/libs/release/libs/optional/))
 
 ## How to use it
 #### Include header and create a connection
@@ -142,7 +143,8 @@ else {
 ```
 
 
-#### Cmd<CMD_DEFAULT>( )
+#### Cmd( )              *<-- normal version.*
+#### Cmd<CMD_DEFAULT>( ) *<-- verbose version.  Unnecessary.  Listed here just for completeness.*
 Flushes all previous responses from the response queue.
 Queues new response(s).
 This is the default behavior resulting from providing no template arguments.
